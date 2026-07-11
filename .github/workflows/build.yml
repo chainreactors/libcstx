@@ -1,0 +1,175 @@
+name: Build & Publish Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      cstx_ref:
+        description: "cstx repo ref to build from (branch/tag/sha)"
+        default: "master"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CSTX_REPO: chainreactors/cstx
+
+jobs:
+  build-ffi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout cstx source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CSTX_REPO }}
+          ref: ${{ github.event.inputs.cstx_ref || 'master' }}
+          path: cstx-src
+          token: ${{ secrets.CSTX_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: >-
+            x86_64-unknown-linux-gnu,
+            aarch64-unknown-linux-gnu,
+            x86_64-apple-darwin,
+            aarch64-apple-darwin,
+            x86_64-pc-windows-gnu
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cstx-src/cstx-core
+
+      - name: Install cargo-zigbuild
+        run: pip install cargo-zigbuild
+
+      - name: Build FFI (all platforms)
+        working-directory: cstx-src/cstx-core
+        run: |
+          cargo build --release -p cstx-ffi
+          cargo zigbuild --release -p cstx-ffi --no-default-features --target aarch64-unknown-linux-gnu
+          cargo zigbuild --release -p cstx-ffi --no-default-features --target x86_64-apple-darwin
+          cargo zigbuild --release -p cstx-ffi --no-default-features --target aarch64-apple-darwin
+          cargo zigbuild --release -p cstx-ffi --no-default-features --target x86_64-pc-windows-gnu
+
+      - name: Generate header
+        working-directory: cstx-src/cstx-core
+        run: |
+          cargo install cbindgen --quiet
+          cbindgen --config crates/cstx-ffi/cbindgen.toml --crate cstx-ffi --output cstx_ffi.h 2>/dev/null || \
+            cbindgen --crate cstx-ffi --output cstx_ffi.h
+
+      - name: Collect .a files
+        run: |
+          BASE=cstx-src/cstx-core/target
+          mkdir -p go/lib/{linux_amd64,linux_arm64,darwin_amd64,darwin_arm64,windows_amd64}
+
+          cp $BASE/release/libcstx_ffi.a go/lib/linux_amd64/
+          cp $BASE/aarch64-unknown-linux-gnu/release/libcstx_ffi.a go/lib/linux_arm64/
+          cp $BASE/x86_64-apple-darwin/release/libcstx_ffi.a go/lib/darwin_amd64/
+          cp $BASE/aarch64-apple-darwin/release/libcstx_ffi.a go/lib/darwin_arm64/
+          cp $BASE/x86_64-pc-windows-gnu/release/libcstx_ffi.a go/lib/windows_amd64/ 2>/dev/null || \
+            cp $BASE/x86_64-pc-windows-gnu/release/cstx_ffi.a go/lib/windows_amd64/libcstx_ffi.a
+
+          # Update header
+          cp cstx-src/cstx-core/cstx_ffi.h include/cstx_ffi.h
+
+          echo "=== Artifacts ==="
+          find go/lib -name "*.a" -exec ls -lh {} \;
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ffi-all-platforms
+          path: go/lib/
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cstx-ffi-header
+          path: include/cstx_ffi.h
+
+  build-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Checkout cstx source
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CSTX_REPO }}
+          ref: ${{ github.event.inputs.cstx_ref || 'master' }}
+          path: cstx-src
+          token: ${{ secrets.CSTX_TOKEN }}
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: cstx-src/cstx-core
+
+      - name: Install wasm-pack
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+      - name: Build WASM
+        working-directory: wasm
+        env:
+          CARGO_TARGET_DIR: ../cstx-src/cstx-core/target
+        run: |
+          wasm-pack build --target bundler --out-dir ../ts/wasm --release
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-bundle
+          path: |
+            ts/wasm/*.wasm
+            ts/wasm/*.js
+            ts/wasm/*.d.ts
+            ts/wasm/package.json
+
+  publish:
+    needs: [build-ffi, build-wasm]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ffi-all-platforms
+          path: go/lib/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: cstx-ffi-header
+          path: include/
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: wasm-bundle
+          path: ts/wasm/
+
+      - name: Commit and push artifacts
+        run: |
+          git config user.name "cstx-bot"
+          git config user.email "cstx-bot@chainreactors.com"
+
+          # Force-add binaries (they're in .gitignore)
+          git add -f go/lib/
+          git add -f ts/wasm/
+          git add include/cstx_ffi.h
+
+          if git diff --cached --quiet; then
+            echo "No changes"
+            exit 0
+          fi
+
+          REF="${{ github.event.inputs.cstx_ref || 'master' }}"
+          git commit -m "chore: update FFI binaries + WASM from cstx@${REF}"
+          git push

@@ -1,9 +1,5 @@
-# Build artifacts
-go/lib/
-*.a
-*.so
-*.dylib
-*.dll
+# Build artifacts (local dev only — CI force-adds these)
+# go/lib/ and ts/wasm/ are committed by CI, not gitignored
 
 # Go
 go/vendor/
@@ -20,7 +16,9 @@ __pycache__/
 # TypeScript
 ts/node_modules/
 ts/dist/
-ts/wasm/*.wasm
+
+# Rust build
+target/
 
 # IDE
 .idea/
