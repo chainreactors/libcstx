@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "cstx-core"
+version = "0.2.0"
+description = "CSTX Graph Engine — native Rust bindings for Python"
+requires-python = ">=3.10"
+license = "MIT"
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+]
+
+[tool.maturin]
+features = ["pyo3/extension-module", "abi3"]
+module-name = "cstx_core._cstx_core"
+python-source = "."

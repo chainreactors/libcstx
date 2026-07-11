@@ -1,0 +1,17 @@
+{
+  "name": "@chainreactors/cstx",
+  "version": "0.2.0",
+  "description": "CSTX Graph Engine — WebAssembly SDK for TypeScript/JavaScript",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": ["dist/", "wasm/"],
+  "scripts": {
+    "build": "tsc",
+    "build:wasm": "cd ../wasm && wasm-pack build --target bundler --out-dir ../ts/wasm",
+    "test": "node --test dist/test.js"
+  },
+  "license": "MIT",
+  "devDependencies": {
+    "typescript": "^5.4"
+  }
+}

@@ -1,0 +1,19 @@
+[package]
+name = "cstx-core-py"
+version = "0.2.0"
+edition = "2021"
+
+[lib]
+name = "_cstx_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+cstx-graph = { path = "../../cstx-core/crates/cstx-graph" }
+cstx-easm = { path = "../../cstx-core/crates/cstx-easm" }
+pyo3 = { version = "0.22", features = ["extension-module"] }
+serde_json = "1"
+smallvec = "1.13"
+
+[features]
+default = []
+abi3 = ["pyo3/abi3-py310"]
