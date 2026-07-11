@@ -1,0 +1,28 @@
+# Build artifacts
+go/lib/
+*.a
+*.so
+*.dylib
+*.dll
+
+# Go
+go/vendor/
+
+# Python
+python/target/
+python/dist/
+python/*.egg-info/
+__pycache__/
+*.pyc
+*.pyo
+.venv*/
+
+# TypeScript
+ts/node_modules/
+ts/dist/
+ts/wasm/*.wasm
+
+# IDE
+.idea/
+.vscode/
+*.swp
