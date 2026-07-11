@@ -30,7 +30,7 @@ jobs:
           repository: ${{ env.CSTX_REPO }}
           ref: ${{ github.event.inputs.cstx_ref || 'master' }}
           path: cstx-src
-          token: ${{ secrets.CSTX_TOKEN }}
+          token: ${{ secrets.UTILS_PUSH_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -103,7 +103,7 @@ jobs:
           repository: ${{ env.CSTX_REPO }}
           ref: ${{ github.event.inputs.cstx_ref || 'master' }}
           path: cstx-src
-          token: ${{ secrets.CSTX_TOKEN }}
+          token: ${{ secrets.UTILS_PUSH_TOKEN }}
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -117,20 +117,18 @@ jobs:
         run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
       - name: Build WASM
-        working-directory: wasm
-        env:
-          CARGO_TARGET_DIR: ../cstx-src/cstx-core/target
+        working-directory: cstx-src/cstx-core
         run: |
-          wasm-pack build --target bundler --out-dir ../ts/wasm --release
+          wasm-pack build crates/cstx-wasm --target bundler --out-dir ../../wasm-out --release
 
       - uses: actions/upload-artifact@v4
         with:
           name: wasm-bundle
           path: |
-            ts/wasm/*.wasm
-            ts/wasm/*.js
-            ts/wasm/*.d.ts
-            ts/wasm/package.json
+            cstx-src/cstx-core/wasm-out/*.wasm
+            cstx-src/cstx-core/wasm-out/*.js
+            cstx-src/cstx-core/wasm-out/*.d.ts
+            cstx-src/cstx-core/wasm-out/package.json
 
   publish:
     needs: [build-ffi, build-wasm]
