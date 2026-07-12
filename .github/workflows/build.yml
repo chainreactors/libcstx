@@ -119,11 +119,17 @@ jobs:
       - name: Build WASM
         working-directory: cstx-src/cstx-core
         run: |
-          wasm-pack build crates/cstx-wasm --target bundler --out-dir ../../wasm-out --release
+          if [ -f crates/cstx-wasm/Cargo.toml ]; then
+            wasm-pack build crates/cstx-wasm --target bundler --out-dir ../../wasm-out --release
+          else
+            echo "::warning::cstx-wasm crate not found, skipping WASM build"
+            mkdir -p ../../wasm-out
+          fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: wasm-bundle
+          if-no-files-found: warn
           path: |
             cstx-src/cstx-core/wasm-out/*.wasm
             cstx-src/cstx-core/wasm-out/*.js
@@ -149,6 +155,7 @@ jobs:
           path: include/
 
       - uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: wasm-bundle
           path: ts/wasm/
@@ -160,8 +167,8 @@ jobs:
 
           # Force-add binaries (they're in .gitignore)
           git add -f go/lib/
-          git add -f ts/wasm/
           git add include/cstx_ffi.h
+          [ -d ts/wasm ] && find ts/wasm -type f | xargs -r git add -f
 
           if git diff --cached --quiet; then
             echo "No changes"
