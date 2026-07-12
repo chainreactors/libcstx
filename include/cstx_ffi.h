@@ -10,21 +10,11 @@
 
 typedef struct CstxGraph CstxGraph;
 
-/* ── Lifecycle ── */
-
 struct CstxGraph *cstx_graph_new(void);
 
 void cstx_graph_free(struct CstxGraph *g);
 
-/* ── Plugin loading ── */
-
-int cstx_graph_load_plugin(struct CstxGraph *g, const char *name);
-
-int cstx_graph_load_all_plugins(struct CstxGraph *g);
-
-char *cstx_available_plugins(void);
-
-/* ── Schema + Rules ── */
+void cstx_graph_load_easm(struct CstxGraph *g);
 
 int cstx_graph_register_schema(struct CstxGraph *g,
                                const char *node_type,
@@ -40,8 +30,6 @@ int cstx_graph_add_join_rule(struct CstxGraph *g,
                              int predicted,
                              const char *left_target_id,
                              const char *right_source_id);
-
-/* ── Node / Edge operations ── */
 
 int cstx_graph_add_node(struct CstxGraph *g,
                         const char *node_type,
@@ -63,8 +51,10 @@ int cstx_graph_add_nodes_batch(struct CstxGraph *g,
 
 int cstx_graph_add_edges_batch(struct CstxGraph *g, const char *edges_json);
 
-/* ── Ingest ── */
-
+/**
+ * High-level link: find parser by source name, parse + dedup + join.
+ * Mirrors Python's `graph.link(source, reader)`.
+ */
 int cstx_graph_link(struct CstxGraph *g,
                     const char *source,
                     const uint8_t *data,
@@ -96,18 +86,34 @@ int cstx_graph_link_nodes(struct CstxGraph *g,
                           char **out,
                           uintptr_t *out_len);
 
-/* ── Queries ── */
-
+/**
+ * Get a single node as JSON with metadata. Mirrors Python graph.node(id).
+ */
 char *cstx_graph_node(struct CstxGraph *g, const char *node_id);
 
+/**
+ * Get nodes, optionally filtered by type. type_filter=NULL means all.
+ */
 char *cstx_graph_nodes(struct CstxGraph *g, const char *type_filter);
 
+/**
+ * Get edges, optionally filtered by relation. relation=NULL means all.
+ */
 char *cstx_graph_edges(struct CstxGraph *g, const char *relation);
 
+/**
+ * List distinct node types. Returns JSON array.
+ */
 char *cstx_graph_node_types(struct CstxGraph *g);
 
+/**
+ * Get neighbors of a node. Returns JSON array.
+ */
 char *cstx_graph_neighbors(struct CstxGraph *g, const char *node_id);
 
+/**
+ * Full graph as JSON: {"nodes": [...], "edges": [...]}.
+ */
 char *cstx_graph_to_json(struct CstxGraph *g);
 
 char *cstx_graph_node_payload(struct CstxGraph *g, const char *node_id);
@@ -124,15 +130,11 @@ char *cstx_graph_stats(struct CstxGraph *g);
 
 char *cstx_graph_all_nodes_json(struct CstxGraph *g);
 
-/* ── Stateless transform shortcut ── */
-
 int cstx_transform(const char *source_type,
                    const uint8_t *data,
                    uintptr_t data_len,
                    char **out,
                    uintptr_t *out_len);
-
-/* ── Utilities ── */
 
 void cstx_free_string(char *s);
 
