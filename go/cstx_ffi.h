@@ -136,6 +136,70 @@ char *cstx_graph_stats(struct CstxGraph *g);
 
 char *cstx_graph_all_nodes_json(struct CstxGraph *g);
 
+/* ── Traversal ── */
+
+char *cstx_graph_neighbor_ids(struct CstxGraph *g,
+                              const char *node_id,
+                              const char *direction);
+
+char *cstx_graph_bfs(struct CstxGraph *g,
+                     const char *seed_id,
+                     unsigned int depth,
+                     int reverse);
+
+char *cstx_graph_shortest_paths(struct CstxGraph *g,
+                                const char *start_id,
+                                const char *end_id,
+                                unsigned int max_depth);
+
+uintptr_t cstx_graph_degree(struct CstxGraph *g,
+                            const char *node_id,
+                            const char *direction);
+
+int cstx_graph_subgraph_node_ids(struct CstxGraph *g,
+                                 const char *seed_ids_json,
+                                 unsigned int depth,
+                                 char **out,
+                                 uintptr_t *out_len);
+
+/* ── Query DSL ── */
+
+int cstx_graph_query_dsl(struct CstxGraph *g,
+                         const char *expression,
+                         long limit,
+                         uintptr_t offset,
+                         char **out,
+                         uintptr_t *out_len);
+
+char *cstx_graph_query_node_ids(struct CstxGraph *g,
+                                const char *expression,
+                                long limit,
+                                uintptr_t offset);
+
+int cstx_graph_is_path_expression(struct CstxGraph *g, const char *expression);
+
+/* ── Filter / Export ── */
+
+char *cstx_graph_edges_filtered(struct CstxGraph *g,
+                                const char *source_id,
+                                const char *target_id,
+                                const char *relation);
+
+char *cstx_graph_export_snapshot_json(struct CstxGraph *g);
+
+/* ── Flags ── */
+
+unsigned long cstx_flags_all_mask(void);
+
+unsigned long cstx_flags_default_exclude_mask(void);
+
+int cstx_graph_update_node_flags(struct CstxGraph *g,
+                                 const char *node_id,
+                                 unsigned long add,
+                                 unsigned long remove,
+                                 long set_to);
+
+/* ── Stateless transform shortcut ── */
 int cstx_transform(const char *source_type,
                    const uint8_t *data,
                    uintptr_t data_len,
