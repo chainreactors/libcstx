@@ -39,6 +39,12 @@ impl Graph {
         Ok(())
     }
 
+    fn load_all_plugins(&mut self) {
+        for p in cstx_graph::plugin::all_plugins() {
+            self.engine.register_plugin(p);
+        }
+    }
+
     #[pyo3(signature = (node_type, json_schema_str, value_field=None))]
     fn register_schema(&mut self, node_type: &str, json_schema_str: &str, value_field: Option<&str>) -> PyResult<()> {
         self.engine.register_schema(node_type, json_schema_str, value_field).map_err(to_py_err)
@@ -58,6 +64,42 @@ impl Graph {
     fn add_edge(&mut self, source_id: &str, target_id: &str, relation: &str, data_source: &str, attrs_json: Option<&str>) -> PyResult<()> {
         self.engine.add_edge(source_id, target_id, relation, data_source, attrs_json).map_err(to_py_err)
     }
+
+    // ── Transform / Link ──
+
+    fn transform(&mut self, source_type: &str, data: &[u8]) -> PyResult<String> {
+        self.engine.transform(source_type, data).map_err(to_py_err)
+    }
+
+    fn link<'py>(&mut self, py: Python<'py>, source: &str, data: &[u8]) -> PyResult<Bound<'py, PyDict>> {
+        let r = self.engine.link(source, data).map_err(to_py_err)?;
+        to_pydict!(py,
+            "records_parsed" => r.records_parsed,
+            "new_nodes" => r.link.new_nodes,
+            "updated_nodes" => r.link.updated_nodes,
+            "new_edges" => r.link.new_edges,
+            "node_count" => r.node_count,
+            "edge_count" => r.edge_count,
+        )
+    }
+
+    // ── Flags ──
+
+    #[pyo3(signature = (node_id, add=0, remove=0, set_to=None))]
+    fn update_node_flags(
+        &mut self,
+        node_id: &str,
+        add: u64,
+        remove: u64,
+        set_to: Option<u64>,
+    ) -> PyResult<bool> {
+        self.engine
+            .update_node_flags(node_id, add, remove, set_to)
+            .map(|r| r.is_some())
+            .map_err(to_py_err)
+    }
+
+    // ── Batch ──
 
     fn add_nodes_batch<'py>(&mut self, py: Python<'py>, nodes_json: &str) -> PyResult<Bound<'py, PyDict>> {
         let r = self.engine.add_nodes_batch(nodes_json).map_err(to_py_err)?;
@@ -82,6 +124,8 @@ impl Graph {
         let r = self.engine.ingest_jsonl(node_type, data, id_expr, data_source).map_err(to_py_err)?;
         to_pydict!(py, "records_parsed" => r.records_parsed, "new_nodes" => r.new_nodes, "updated_nodes" => r.updated_nodes)
     }
+
+    // ── Accessors ──
 
     fn contains_node(&self, node_id: &str) -> bool { self.engine.contains_node(node_id) }
     fn node_count(&self) -> usize { self.engine.node_count() }
@@ -118,10 +162,106 @@ impl Graph {
             .flat_map(|p| p.artifacts().iter().map(|a| a.to_string()))
             .collect()
     }
+
+    // ── Traversal ──
+
+    #[pyo3(signature = (node_id, direction="out"))]
+    fn neighbor_ids(&self, node_id: &str, direction: &str) -> Vec<String> {
+        self.engine.neighbor_ids(node_id, direction)
+    }
+
+    #[pyo3(signature = (seed_id, depth=0, reverse=false))]
+    fn bfs(&self, seed_id: &str, depth: u32, reverse: bool) -> Vec<String> {
+        self.engine.bfs(seed_id, depth, reverse)
+    }
+
+    #[pyo3(signature = (start_id, end_id, max_depth=5))]
+    fn shortest_paths(&self, start_id: &str, end_id: &str, max_depth: u32) -> Vec<Vec<String>> {
+        self.engine.shortest_paths(start_id, end_id, max_depth)
+    }
+
+    #[pyo3(signature = (node_id, direction="both"))]
+    fn degree(&self, node_id: &str, direction: &str) -> usize {
+        self.engine.degree(node_id, direction)
+    }
+
+    #[pyo3(signature = (seed_ids, depth=0))]
+    fn subgraph_node_ids(&self, seed_ids: Vec<String>, depth: u32) -> (Vec<String>, Vec<String>) {
+        let refs: Vec<&str> = seed_ids.iter().map(|s| s.as_str()).collect();
+        self.engine.subgraph_node_ids(refs, depth)
+    }
+
+    // ── Query DSL ──
+
+    #[pyo3(signature = (expression,))]
+    fn parse_query(&self, expression: &str) -> PyResult<(String, Option<String>)> {
+        let pq = self.engine.parse_query(expression).map_err(to_py_err)?;
+        let semantic = pq.semantic_query.clone();
+        let json = serde_json::to_string(&pq).map_err(to_py_err)?;
+        Ok((json, semantic))
+    }
+
+    #[pyo3(signature = (ast_json, semantic_allowed_ids=None, limit=None, offset=0, flags_exclude_mask=0, flags_include_mask=0))]
+    fn execute_query(
+        &self,
+        ast_json: &str,
+        semantic_allowed_ids: Option<Vec<String>>,
+        limit: Option<usize>,
+        offset: usize,
+        flags_exclude_mask: u64,
+        flags_include_mask: u64,
+    ) -> PyResult<String> {
+        self.engine
+            .execute_query(
+                ast_json, semantic_allowed_ids.as_deref(), limit, offset,
+                flags_exclude_mask, flags_include_mask,
+            )
+            .map_err(to_py_err)
+    }
+
+    #[pyo3(signature = (expression, limit=None, offset=0))]
+    fn query_dsl(&self, expression: &str, limit: Option<usize>, offset: usize) -> PyResult<String> {
+        self.engine.query_dsl(expression, limit, offset).map_err(to_py_err)
+    }
+
+    fn is_path_expression(&self, expression: &str) -> bool {
+        self.engine.is_path_expression(expression)
+    }
+
+    #[pyo3(signature = (expression, limit=None, offset=0))]
+    fn query_node_ids(&self, expression: &str, limit: Option<usize>, offset: usize) -> PyResult<Vec<String>> {
+        self.engine.query_node_ids(expression, limit, offset).map_err(to_py_err)
+    }
+
+    // ── Filter / Subgraph ──
+
+    #[pyo3(signature = (source_id=None, target_id=None, relation=None))]
+    fn edges_filtered(&self, source_id: Option<&str>, target_id: Option<&str>, relation: Option<&str>) -> String {
+        self.engine.edges_filtered(source_id, target_id, relation)
+    }
+
+    fn export_snapshot_json(&self) -> String {
+        self.engine.export_snapshot_json()
+    }
+}
+
+// ── Module-level transform function ──
+
+/// Stateless transform: creates a temporary engine with all plugins,
+/// ingests data for the given source_type, returns all nodes as JSON.
+#[pyfunction]
+#[pyo3(name = "transform")]
+fn transform_fn(source_type: &str, data: &[u8]) -> PyResult<String> {
+    let mut engine = CstxEngine::new();
+    for p in cstx_graph::plugin::all_plugins() {
+        engine.register_plugin(p);
+    }
+    engine.transform(source_type, data).map_err(to_py_err)
 }
 
 #[pymodule]
-fn _cstx_core(m: &Bound<'_, PyModule>) -> PyResult<()> {
+fn _cstxpy(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Graph>()?;
+    m.add_function(wrap_pyfunction!(transform_fn, m)?)?;
     Ok(())
 }

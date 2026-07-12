@@ -2,6 +2,8 @@
 // This file provides the TypeScript-friendly wrapper with proper typing.
 
 import type * as wasm from '../wasm/cstx_wasm';
+import type { SCONode } from './types/sco_gen';
+import { SCO_TYPE_MAP } from './types/sco_gen';
 
 export interface IngestResult {
   records_parsed: number;
@@ -17,6 +19,50 @@ export interface BatchResult {
   updated_nodes: number;
   count: number;
 }
+
+export interface SubgraphResult {
+  nodes: string[];
+  edges: string[];
+}
+
+export type TraversalDirection = 'in' | 'out' | 'both';
+
+export interface EdgeRecord {
+  source_id: string;
+  target_id: string;
+  relation_type: string;
+  sources?: string[];
+  [key: string]: unknown;
+}
+
+/**
+ * Parse a plain object into a typed SCO node based on its cstx_type field.
+ * Returns the object cast to SCONode if the type is recognized, or null otherwise.
+ */
+export function parseSCONode(obj: Record<string, unknown>): SCONode | null {
+  const cstxType = obj.cstx_type;
+  if (typeof cstxType !== 'string') return null;
+  if (!(cstxType in SCO_TYPE_MAP)) return null;
+  return obj as unknown as SCONode;
+}
+
+/**
+ * Flag constants exposed by the WASM layer.
+ */
+export const FlagConstants = {
+  /** Mask with all flag bits set */
+  ALL_MASK: 0xFFFFFFFF,
+  /** Default exclusion mask (inactive/noise nodes) */
+  DEFAULT_EXCLUDE_MASK: 0x00000003,
+  /** No flags set */
+  NONE: 0,
+  /** Node is marked inactive */
+  INACTIVE: 1 << 0,
+  /** Node is noise / low confidence */
+  NOISE: 1 << 1,
+  /** Node is user-pinned */
+  PINNED: 1 << 2,
+} as const;
 
 let wasmModule: typeof wasm | null = null;
 
@@ -133,6 +179,174 @@ export class CSTXGraph {
 
   free(): void {
     this.inner.free();
+  }
+
+  // --- Schema/Rules ---
+
+  /**
+   * Add a join rule linking two node types by key fields.
+   * Throws if the rule is invalid or conflicts with existing rules.
+   */
+  addJoinRule(
+    leftType: string,
+    rightType: string,
+    relation: string,
+    leftKey: string,
+    rightKey: string,
+    predicted: boolean
+  ): void {
+    this.inner.addJoinRule(leftType, rightType, relation, leftKey, rightKey, predicted);
+  }
+
+  // --- Flags ---
+
+  /**
+   * Update flags on a node. `add` bits are ORed in, `remove` bits are cleared,
+   * `setTo` replaces the flags absolutely (pass -1 to skip absolute set).
+   * Returns true if the node existed and was updated.
+   */
+  updateNodeFlags(nodeId: string, add: number, remove: number, setTo: number): boolean {
+    return this.inner.updateNodeFlags(
+      nodeId,
+      BigInt(add),
+      BigInt(remove),
+      BigInt(setTo)
+    );
+  }
+
+  /**
+   * Returns the mask with all flag bits set.
+   */
+  static flagsAllMask(): number {
+    return FlagConstants.ALL_MASK;
+  }
+
+  /**
+   * Returns the default exclusion mask used by queries.
+   */
+  static flagsDefaultExcludeMask(): number {
+    return FlagConstants.DEFAULT_EXCLUDE_MASK;
+  }
+
+  // --- Traversal ---
+
+  /**
+   * Get IDs of direct neighbors in the given direction.
+   */
+  neighborIds(nodeId: string, direction: TraversalDirection): string[] {
+    const json = this.inner.neighborIds(nodeId, direction);
+    return JSON.parse(json);
+  }
+
+  /**
+   * Breadth-first search from a seed node up to a given depth.
+   * If reverse is true, follows incoming edges instead of outgoing.
+   */
+  bfs(seedId: string, depth: number, reverse: boolean): string[] {
+    const json = this.inner.bfs(seedId, depth, reverse);
+    return JSON.parse(json);
+  }
+
+  /**
+   * Find all shortest paths between two nodes up to maxDepth.
+   * Returns an array of paths, where each path is an ordered list of node IDs.
+   */
+  shortestPaths(startId: string, endId: string, maxDepth: number): string[][] {
+    const json = this.inner.shortestPaths(startId, endId, maxDepth);
+    return JSON.parse(json);
+  }
+
+  /**
+   * Get the degree (number of edges) for a node in the given direction.
+   */
+  degree(nodeId: string, direction: TraversalDirection): number {
+    return this.inner.degree(nodeId, direction);
+  }
+
+  /**
+   * Extract a subgraph around seed nodes up to a given depth.
+   * Returns both the node IDs and edge IDs in the subgraph.
+   */
+  subgraphNodeIds(seedIds: string[], depth: number): SubgraphResult {
+    const json = this.inner.subgraphNodeIds(JSON.stringify(seedIds), depth);
+    return JSON.parse(json);
+  }
+
+  // --- Query DSL ---
+
+  /**
+   * Execute a query DSL expression and return parsed result objects.
+   * Supports pagination via limit and offset.
+   */
+  queryDsl(expression: string, limit?: number, offset?: number): object[] {
+    const json = this.inner.queryDsl(
+      expression,
+      limit ?? 0,
+      offset ?? 0
+    );
+    return JSON.parse(json);
+  }
+
+  /**
+   * Execute a query DSL expression and return only the matching node IDs.
+   */
+  queryNodeIds(expression: string, limit?: number, offset?: number): string[] {
+    const json = this.inner.queryNodeIds(
+      expression,
+      limit ?? 0,
+      offset ?? 0
+    );
+    return JSON.parse(json);
+  }
+
+  /**
+   * Check whether an expression is a path expression (traversal query)
+   * vs a filter expression.
+   */
+  isPathExpression(expression: string): boolean {
+    return this.inner.isPathExpression(expression);
+  }
+
+  // --- Filter/Export ---
+
+  /**
+   * Get edges matching optional source, target, and relation filters.
+   */
+  edgesFiltered(sourceId?: string, targetId?: string, relation?: string): EdgeRecord[] {
+    const json = this.inner.edgesFiltered(sourceId, targetId, relation);
+    return JSON.parse(json);
+  }
+
+  /**
+   * Export the full graph state as a JSON-serializable snapshot object.
+   */
+  exportSnapshotJson(): object {
+    const json = this.inner.exportSnapshotJson();
+    return JSON.parse(json);
+  }
+
+  /**
+   * Get all node IDs in the graph.
+   */
+  nodeIds(): string[] {
+    const json = this.inner.nodeIds();
+    return JSON.parse(json);
+  }
+
+  /**
+   * List all available plugins (native ingest formats).
+   */
+  availablePlugins(): string[] {
+    const json = this.inner.availablePlugins();
+    return JSON.parse(json);
+  }
+
+  /**
+   * Ingest raw data from a named source (link-style ingestion).
+   */
+  link(source: string, data: Uint8Array): IngestResult {
+    const json = this.inner.link(source, data);
+    return JSON.parse(json);
   }
 }
 

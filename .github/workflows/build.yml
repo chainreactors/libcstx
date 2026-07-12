@@ -165,7 +165,6 @@ jobs:
           git config user.name "cstx-bot"
           git config user.email "cstx-bot@chainreactors.com"
 
-          # Force-add binaries (they're in .gitignore)
           git add -f go/lib/
           git add include/cstx_ffi.h
           [ -d ts/wasm ] && find ts/wasm -type f | xargs -r git add -f

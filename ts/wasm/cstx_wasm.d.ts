@@ -24,5 +24,30 @@ export class CSTXGraph {
   stats(): string;
   version(): string;
   supportedArtifacts(): string;
+
+  // Schema/Rules
+  addJoinRule(leftType: string, rightType: string, relation: string, leftKey: string, rightKey: string, predicted: boolean): void;
+
+  // Flags
+  updateNodeFlags(nodeId: string, add: bigint, remove: bigint, setTo: bigint): boolean;
+
+  // Traversal
+  neighborIds(nodeId: string, direction: string): string;
+  bfs(seedId: string, depth: number, reverse: boolean): string;
+  shortestPaths(startId: string, endId: string, maxDepth: number): string;
+  degree(nodeId: string, direction: string): number;
+  subgraphNodeIds(seedIdsJson: string, depth: number): string;
+
+  // Query DSL
+  queryDsl(expression: string, limit: number, offset: number): string;
+  queryNodeIds(expression: string, limit: number, offset: number): string;
+  isPathExpression(expression: string): boolean;
+
+  // Filter/Export
+  edgesFiltered(sourceId: string | undefined, targetId: string | undefined, relation: string | undefined): string;
+  exportSnapshotJson(): string;
+  nodeIds(): string;
+  availablePlugins(): string;
+  link(source: string, data: Uint8Array): string;
 }
 export function cstxTransform(sourceType: string, data: Uint8Array): string;

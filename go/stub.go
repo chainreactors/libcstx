@@ -41,3 +41,25 @@ func Transform(string, []byte) ([]byte, error)              { return nil, errStu
 func Parse(string, any) ([]SCONode, error)                  { return nil, errStub }
 func Version() string                                       { return "stub" }
 func SupportedArtifacts() []string                          { return nil }
+
+// ── Traversal stubs ──
+
+func (g *Graph) NeighborIDs(string, string) []string                     { return nil }
+func (g *Graph) BFS(string, uint32, bool) []string                       { return nil }
+func (g *Graph) ShortestPaths(string, string, uint32) [][]string         { return nil }
+func (g *Graph) Degree(string, string) int                               { return 0 }
+func (g *Graph) SubgraphNodeIDs([]string, uint32) ([]string, []string, error) { return nil, nil, errStub }
+
+// ── Query DSL stubs ──
+
+func (g *Graph) QueryDSL(string, int, int) (string, error)  { return "", errStub }
+func (g *Graph) QueryNodeIDs(string, int, int) ([]string, error) { return nil, errStub }
+func (g *Graph) IsPathExpression(string) bool                { return false }
+
+// ── Filter / Export stubs ──
+
+func (g *Graph) EdgesFiltered(string, string, string) string { return "[]" }
+func (g *Graph) ExportSnapshotJSON() string                  { return "{}" }
+func (g *Graph) UpdateNodeFlags(string, uint64, uint64, int64) bool { return false }
+func FlagsAllMask() uint64                                   { return 0 }
+func FlagsDefaultExcludeMask() uint64                        { return 0 }

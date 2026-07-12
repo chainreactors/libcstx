@@ -1,4 +1,4 @@
-from cstx_core import Graph
+from cstxpy import Graph
 
 
 def test_lifecycle():
