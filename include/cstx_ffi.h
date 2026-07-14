@@ -8,13 +8,13 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+typedef struct CstxCasStore CstxCasStore;
+
 typedef struct CstxGraph CstxGraph;
 
 struct CstxGraph *cstx_graph_new(void);
 
 void cstx_graph_free(struct CstxGraph *g);
-
-void cstx_graph_load_easm(struct CstxGraph *g);
 
 int cstx_graph_load_plugin(struct CstxGraph *g, const char *name);
 
@@ -57,10 +57,6 @@ int cstx_graph_add_nodes_batch(struct CstxGraph *g,
 
 int cstx_graph_add_edges_batch(struct CstxGraph *g, const char *edges_json);
 
-/**
- * High-level link: find parser by source name, parse + dedup + join.
- * Mirrors Python's `graph.link(source, reader)`.
- */
 int cstx_graph_link(struct CstxGraph *g,
                     const char *source,
                     const uint8_t *data,
@@ -92,34 +88,16 @@ int cstx_graph_link_nodes(struct CstxGraph *g,
                           char **out,
                           uintptr_t *out_len);
 
-/**
- * Get a single node as JSON with metadata. Mirrors Python graph.node(id).
- */
 char *cstx_graph_node(struct CstxGraph *g, const char *node_id);
 
-/**
- * Get nodes, optionally filtered by type. type_filter=NULL means all.
- */
 char *cstx_graph_nodes(struct CstxGraph *g, const char *type_filter);
 
-/**
- * Get edges, optionally filtered by relation. relation=NULL means all.
- */
 char *cstx_graph_edges(struct CstxGraph *g, const char *relation);
 
-/**
- * List distinct node types. Returns JSON array.
- */
 char *cstx_graph_node_types(struct CstxGraph *g);
 
-/**
- * Get neighbors of a node. Returns JSON array.
- */
 char *cstx_graph_neighbors(struct CstxGraph *g, const char *node_id);
 
-/**
- * Full graph as JSON: {"nodes": [...], "edges": [...]}.
- */
 char *cstx_graph_to_json(struct CstxGraph *g);
 
 char *cstx_graph_node_payload(struct CstxGraph *g, const char *node_id);
@@ -136,6 +114,44 @@ char *cstx_graph_stats(struct CstxGraph *g);
 
 char *cstx_graph_all_nodes_json(struct CstxGraph *g);
 
+char *cstx_graph_neighbor_ids(struct CstxGraph *g, const char *node_id, const char *direction);
+
+char *cstx_graph_bfs(struct CstxGraph *g, const char *seed_id, uint32_t depth, int reverse);
+
+char *cstx_graph_shortest_paths(struct CstxGraph *g,
+                                const char *start_id,
+                                const char *end_id,
+                                uint32_t max_depth);
+
+uintptr_t cstx_graph_degree(struct CstxGraph *g, const char *node_id, const char *direction);
+
+int cstx_graph_subgraph_node_ids(struct CstxGraph *g,
+                                 const char *seed_ids_json,
+                                 uint32_t depth,
+                                 char **out,
+                                 uintptr_t *out_len);
+
+int cstx_graph_query_dsl(struct CstxGraph *g,
+                         const char *expression,
+                         intptr_t limit,
+                         uintptr_t offset,
+                         char **out,
+                         uintptr_t *out_len);
+
+char *cstx_graph_query_node_ids(struct CstxGraph *g,
+                                const char *expression,
+                                intptr_t limit,
+                                uintptr_t offset);
+
+int cstx_graph_is_path_expression(struct CstxGraph *g, const char *expression);
+
+char *cstx_graph_edges_filtered(struct CstxGraph *g,
+                                const char *source_id,
+                                const char *target_id,
+                                const char *relation);
+
+char *cstx_graph_export_snapshot_json(struct CstxGraph *g);
+
 int cstx_transform(const char *source_type,
                    const uint8_t *data,
                    uintptr_t data_len,
@@ -147,5 +163,75 @@ void cstx_free_string(char *s);
 const char *cstx_version(void);
 
 char *cstx_supported_artifacts(void);
+
+uint64_t cstx_flags_all_mask(void);
+
+uint64_t cstx_flags_default_exclude_mask(void);
+
+int cstx_graph_update_node_flags(struct CstxGraph *g,
+                                 const char *node_id,
+                                 uint64_t add,
+                                 uint64_t remove,
+                                 int64_t set_to);
+
+struct CstxCasStore *cstx_cas_store_new(void);
+
+void cstx_cas_store_free(struct CstxCasStore *s);
+
+/**
+ * Load a root tree object into the store.
+ * kind: "root" | "map" — determines how to parse the JSON.
+ * For "root": JSON is {"node_types":{"type":"hash",...},"edge_types":{...}}
+ * For "map": JSON is {"key":"hash",...}
+ */
+int cstx_cas_store_load_root(struct CstxCasStore *s, const char *hash, const char *json_str);
+
+/**
+ * Load a map (type-tree or bucket) object into the store.
+ */
+int cstx_cas_store_load_map(struct CstxCasStore *s, const char *hash, const char *json_str);
+
+/**
+ * Export all tree objects from the store as JSON.
+ * Returns: {"hash": {"key": "value", ...}, ...}
+ */
+char *cstx_cas_store_export(struct CstxCasStore *s, const char *root_hash);
+
+/**
+ * SHA-256 of canonical JSON. Caller frees result.
+ */
+char *cstx_cas_canonical_hash(const char *json_str);
+
+/**
+ * Build a Merkle tree from entries JSON.
+ * entries_json: {"type": {"id": "hash", ...}, ...}
+ * Returns root hash. Caller frees.
+ */
+char *cstx_cas_tree_build(struct CstxCasStore *s, const char *entries_json);
+
+/**
+ * Update a Merkle tree incrementally.
+ * changes_json: {"type": {"id": "new_hash_or_null", ...}, ...}
+ * null values = delete. Returns new root hash. Caller frees.
+ */
+char *cstx_cas_tree_update(struct CstxCasStore *s, const char *root_hash, const char *changes_json);
+
+/**
+ * Diff two Merkle trees. Returns JSON: {"added":{},"removed":{},"modified":{}}
+ * Caller frees.
+ */
+char *cstx_cas_tree_diff(struct CstxCasStore *s, const char *base_hash, const char *head_hash);
+
+/**
+ * Find an element in the tree by ID (searches all types).
+ * Returns content hash or NULL if not found. Caller frees.
+ */
+char *cstx_cas_tree_find(struct CstxCasStore *s, const char *root_hash, const char *element_id);
+
+/**
+ * Materialize all entries from a tree.
+ * Returns JSON: {"type": {"id": "hash", ...}, ...}. Caller frees.
+ */
+char *cstx_cas_tree_entries(struct CstxCasStore *s, const char *root_hash);
 
 #endif  /* CSTX_FFI_H */
