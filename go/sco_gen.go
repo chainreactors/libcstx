@@ -112,6 +112,27 @@ type Vuln struct {
 	Response             string       `json:"response,omitempty"`
 	Username             string       `json:"username,omitempty"`
 	Password             string       `json:"password,omitempty"`
+	Matched              bool         `json:"matched,omitempty"`
+	Extracted            bool         `json:"extracted,omitempty"`
+}
+
+// SarifVuln is a SARIF v2.1.0 aligned vulnerability finding.
+// Atomic fields are columnar in the graph; evidence holds detailed JSON (exchanges, suppression).
+type SarifVuln struct {
+	nodeHeader
+	Value                string       `json:"value"`
+	VulnId               string       `json:"vuln_id,omitempty"`
+	Title                string       `json:"title,omitempty"`
+	Description          string       `json:"description,omitempty"`
+	Source               string       `json:"source,omitempty"`
+	Target               string       `json:"target,omitempty"`
+	Tags                 []string     `json:"tags,omitempty"`
+	AssetCstxId          string       `json:"asset_cstx_id,omitempty"`
+	Kind                 string       `json:"kind,omitempty"`
+	Level                string       `json:"level,omitempty"`
+	BaselineState        string       `json:"baseline_state,omitempty"`
+	RuleId               string       `json:"rule_id,omitempty"`
+	Evidence             string       `json:"evidence,omitempty"`
 }
 
 type Certificate struct {
@@ -248,6 +269,8 @@ func ParseSCONode(data []byte) (SCONode, error) {
 		var v Framework; err := json.Unmarshal(data, &v); return &v, err
 	case "vuln":
 		var v Vuln; err := json.Unmarshal(data, &v); return &v, err
+	case "sarif_vuln":
+		var v SarifVuln; err := json.Unmarshal(data, &v); return &v, err
 	case "certificate":
 		var v Certificate; err := json.Unmarshal(data, &v); return &v, err
 	case "company":
