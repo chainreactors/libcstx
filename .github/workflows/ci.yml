@@ -7,6 +7,11 @@ on:
       - "go/**"
       - "include/**"
       - "ts/**"
+  pull_request:
+    paths:
+      - "go/**"
+      - "include/**"
+      - "ts/**"
   workflow_dispatch:
 
 jobs:
