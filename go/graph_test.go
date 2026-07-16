@@ -1,5 +1,3 @@
-//go:build cstx_native
-
 package cstx
 
 import "testing"

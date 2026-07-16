@@ -1,4 +1,4 @@
-//go:build cstx_native && darwin && arm64
+//go:build darwin && arm64
 
 package cstx
 

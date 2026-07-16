@@ -1,4 +1,4 @@
-//go:build cstx_native && linux && amd64
+//go:build linux && amd64
 
 package cstx
 

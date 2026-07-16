@@ -1,4 +1,4 @@
-//go:build cstx_native && darwin && amd64
+//go:build darwin && amd64
 
 package cstx
 

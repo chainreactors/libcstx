@@ -1,4 +1,4 @@
-//go:build cstx_native && windows && amd64
+//go:build windows && amd64
 
 package cstx
 
