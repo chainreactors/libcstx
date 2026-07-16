@@ -18,8 +18,8 @@ func (g *Graph) QueryDSL(expression string, limit int, offset int) (string, erro
 	defer C.free(unsafe.Pointer(cExpr))
 
 	var out *C.char
-	var outLen C.size_t
-	rc := C.cstx_graph_query_dsl(g.ptr, cExpr, C.long(limit), C.size_t(offset), &out, &outLen)
+	var outLen C.uintptr_t
+	rc := C.cstx_graph_query_dsl(g.ptr, cExpr, C.intptr_t(limit), C.uintptr_t(offset), &out, &outLen)
 	if out != nil {
 		defer C.cstx_free_string(out)
 	}
@@ -34,7 +34,7 @@ func (g *Graph) QueryNodeIDs(expression string, limit int, offset int) ([]string
 	cExpr := C.CString(expression)
 	defer C.free(unsafe.Pointer(cExpr))
 
-	out := C.cstx_graph_query_node_ids(g.ptr, cExpr, C.long(limit), C.size_t(offset))
+	out := C.cstx_graph_query_node_ids(g.ptr, cExpr, C.intptr_t(limit), C.uintptr_t(offset))
 	if out == nil {
 		return nil, nil
 	}

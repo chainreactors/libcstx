@@ -47,7 +47,7 @@ func (g *Graph) ExportSnapshotJSON() string {
 func (g *Graph) UpdateNodeFlags(nodeID string, add, remove uint64, setTo int64) bool {
 	cID := C.CString(nodeID)
 	defer C.free(unsafe.Pointer(cID))
-	return C.cstx_graph_update_node_flags(g.ptr, cID, C.ulong(add), C.ulong(remove), C.long(setTo)) == 0
+	return C.cstx_graph_update_node_flags(g.ptr, cID, C.uint64_t(add), C.uint64_t(remove), C.int64_t(setTo)) == 0
 }
 
 // FlagsAllMask returns the mask of all defined flags.
