@@ -51,8 +51,8 @@ jobs:
       - name: Build FFI (all platforms)
         working-directory: cstx-src/cstx-core
         run: |
-          cargo build --release -p cstx-ffi
-          cargo zigbuild --release -p cstx-ffi --no-default-features --target aarch64-unknown-linux-gnu
+          cargo zigbuild --release -p cstx-ffi --target x86_64-unknown-linux-gnu.2.17
+          cargo zigbuild --release -p cstx-ffi --no-default-features --target aarch64-unknown-linux-gnu.2.17
           cargo zigbuild --release -p cstx-ffi --no-default-features --target x86_64-apple-darwin
           cargo zigbuild --release -p cstx-ffi --no-default-features --target aarch64-apple-darwin
           cargo zigbuild --release -p cstx-ffi --no-default-features --target x86_64-pc-windows-gnu
@@ -69,7 +69,7 @@ jobs:
           BASE=cstx-src/cstx-core/target
           mkdir -p go/lib/{linux_amd64,linux_arm64,darwin_amd64,darwin_arm64,windows_amd64}
 
-          cp $BASE/release/libcstx_ffi.a go/lib/linux_amd64/
+          cp $BASE/x86_64-unknown-linux-gnu/release/libcstx_ffi.a go/lib/linux_amd64/
           cp $BASE/aarch64-unknown-linux-gnu/release/libcstx_ffi.a go/lib/linux_arm64/
           cp $BASE/x86_64-apple-darwin/release/libcstx_ffi.a go/lib/darwin_amd64/
           cp $BASE/aarch64-apple-darwin/release/libcstx_ffi.a go/lib/darwin_arm64/

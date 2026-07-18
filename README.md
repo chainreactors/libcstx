@@ -24,6 +24,14 @@ Build (requires CGO for static FFI linkage):
 CGO_ENABLED=1 go build ./...
 ```
 
+Cross-compile or target older Linux (avoid glibc version issues):
+
+```bash
+CGO_ENABLED=1 CC="zig cc -target x86_64-linux-gnu.2.17" CXX="zig c++ -target x86_64-linux-gnu.2.17" go build ./...
+```
+
+> Go + CGO 在编译时会绑定宿主系统的 glibc 版本（如 `pthread_create` 在 glibc 2.34 后从 `libpthread` 合并到 `libc.so`）。如果产物需要在较旧的 Linux 上运行，使用 [zig](https://ziglang.org/) 作为 CC 可以将 glibc 依赖锁定到指定版本。
+
 ### Python
 
 ```bash
