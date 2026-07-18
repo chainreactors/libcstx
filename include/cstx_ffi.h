@@ -234,4 +234,56 @@ char *cstx_cas_tree_find(struct CstxCasStore *s, const char *root_hash, const ch
  */
 char *cstx_cas_tree_entries(struct CstxCasStore *s, const char *root_hash);
 
+int cstx_graph_semantic_texts(struct CstxGraph *g,
+                              const char *node_types_json,
+                              char **out,
+                              uintptr_t *out_len);
+
+void cstx_graph_init_rag(struct CstxGraph *g, uintptr_t dims);
+
+/**
+ * entries_json: [[arena_idx, "node_type", [f32, ...]], ...]
+ */
+int cstx_graph_set_vectors(struct CstxGraph *g,
+                           const char *entries_json,
+                           char **out,
+                           uintptr_t *out_len);
+
+int cstx_graph_build_indices(struct CstxGraph *g, char **out, uintptr_t *out_len);
+
+/**
+ * Returns JSON: [[arena_idx, score, "cstx_id"], ...]
+ */
+int cstx_graph_rag_search(struct CstxGraph *g,
+                          const char *query_text,
+                          const char *query_vector_json,
+                          const char *strategy,
+                          const char *node_types_json,
+                          uintptr_t top_k,
+                          char **out,
+                          uintptr_t *out_len);
+
+/**
+ * Returns JSON: {"count": N, "modularity": f64}
+ */
+int cstx_graph_detect_communities(struct CstxGraph *g,
+                                  double resolution,
+                                  uintptr_t min_community_size,
+                                  char **out,
+                                  uintptr_t *out_len);
+
+int cstx_graph_set_community_summary(struct CstxGraph *g,
+                                     uint32_t community_id,
+                                     const char *summary,
+                                     char **out,
+                                     uintptr_t *out_len);
+
+/**
+ * Returns JSON array of arena indices: [u32, ...]
+ */
+int cstx_graph_community_members(struct CstxGraph *g,
+                                 uint32_t community_id,
+                                 char **out,
+                                 uintptr_t *out_len);
+
 #endif  /* CSTX_FFI_H */
