@@ -8,282 +8,178 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef struct CstxCasStore CstxCasStore;
+enum CstxStatusCode
+#if __STDC_VERSION__ >= 202311L
+  : int32_t
+#endif // __STDC_VERSION__ >= 202311L
+ {
+  Ok = 0,
+  InvalidArgument = 1,
+  NotFound = 2,
+  Conflict = 3,
+  NotInitialized = 4,
+  Unsupported = 5,
+  Internal = 6,
+  Validation = 7,
+  Parse = 8,
+  Io = 9,
+  CorruptData = 10,
+  CursorInvalidated = 11,
+};
+#if __STDC_VERSION__ >= 202311L
+typedef enum CstxStatusCode CstxStatusCode;
+#else
+typedef int32_t CstxStatusCode;
+#endif // __STDC_VERSION__ >= 202311L
 
-typedef struct CstxGraph CstxGraph;
+typedef struct CstxEdgeIterator CstxEdgeIterator;
 
-struct CstxGraph *cstx_graph_new(void);
+typedef struct CstxHandle CstxHandle;
 
-void cstx_graph_free(struct CstxGraph *g);
+typedef struct CstxNodeIterator CstxNodeIterator;
 
-int cstx_graph_load_plugin(struct CstxGraph *g, const char *name);
+typedef struct CstxBuffer {
+  uint8_t *data;
+  uintptr_t len;
+} CstxBuffer;
 
-int cstx_graph_load_all_plugins(struct CstxGraph *g);
-
-char *cstx_available_plugins(void);
-
-int cstx_graph_register_schema(struct CstxGraph *g,
-                               const char *node_type,
-                               const char *json_schema_str,
-                               const char *value_field);
-
-int cstx_graph_add_join_rule(struct CstxGraph *g,
-                             const char *left_type,
-                             const char *right_type,
-                             const char *relation,
-                             const char *left_key,
-                             const char *right_key,
-                             int predicted,
-                             const char *left_target_id,
-                             const char *right_source_id);
-
-int cstx_graph_add_node(struct CstxGraph *g,
-                        const char *node_type,
-                        const char *cstx_id,
-                        const char *payload_json,
-                        const char *sources_json,
-                        uint64_t cstx_flags);
-
-int cstx_graph_add_edge(struct CstxGraph *g,
-                        const char *source_id,
-                        const char *target_id,
-                        const char *relation,
-                        const char *data_source);
-
-int cstx_graph_add_nodes_batch(struct CstxGraph *g,
-                               const char *nodes_json,
-                               char **out,
-                               uintptr_t *out_len);
-
-int cstx_graph_add_edges_batch(struct CstxGraph *g, const char *edges_json);
-
-int cstx_graph_link(struct CstxGraph *g,
-                    const char *source,
-                    const uint8_t *data,
-                    uintptr_t data_len,
-                    char **out,
-                    uintptr_t *out_len);
-
-int cstx_graph_ingest_native(struct CstxGraph *g,
-                             const char *plugin_name,
-                             const char *artifact,
-                             const uint8_t *data,
-                             uintptr_t data_len,
-                             char **out,
-                             uintptr_t *out_len);
-
-int cstx_graph_has_native_artifact(struct CstxGraph *g, const char *artifact);
-
-int cstx_graph_ingest_jsonl(struct CstxGraph *g,
-                            const char *node_type,
-                            const uint8_t *data,
-                            uintptr_t data_len,
-                            const char *id_expr,
-                            const char *data_source,
-                            char **out,
-                            uintptr_t *out_len);
-
-int cstx_graph_link_nodes(struct CstxGraph *g,
-                          const char *data_source,
-                          char **out,
-                          uintptr_t *out_len);
-
-char *cstx_graph_node(struct CstxGraph *g, const char *node_id);
-
-char *cstx_graph_nodes(struct CstxGraph *g, const char *type_filter);
-
-char *cstx_graph_edges(struct CstxGraph *g, const char *relation);
-
-char *cstx_graph_node_types(struct CstxGraph *g);
-
-char *cstx_graph_neighbors(struct CstxGraph *g, const char *node_id);
-
-char *cstx_graph_to_json(struct CstxGraph *g);
-
-char *cstx_graph_node_payload(struct CstxGraph *g, const char *node_id);
-
-int cstx_graph_contains_node(struct CstxGraph *g, const char *node_id);
-
-uintptr_t cstx_graph_node_count(struct CstxGraph *g);
-
-uintptr_t cstx_graph_edge_count(struct CstxGraph *g);
-
-char *cstx_graph_node_ids(struct CstxGraph *g);
-
-char *cstx_graph_stats(struct CstxGraph *g);
-
-char *cstx_graph_all_nodes_json(struct CstxGraph *g);
-
-char *cstx_graph_neighbor_ids(struct CstxGraph *g, const char *node_id, const char *direction);
-
-char *cstx_graph_bfs(struct CstxGraph *g, const char *seed_id, uint32_t depth, int reverse);
-
-char *cstx_graph_shortest_paths(struct CstxGraph *g,
-                                const char *start_id,
-                                const char *end_id,
-                                uint32_t max_depth);
-
-uintptr_t cstx_graph_degree(struct CstxGraph *g, const char *node_id, const char *direction);
-
-int cstx_graph_subgraph_node_ids(struct CstxGraph *g,
-                                 const char *seed_ids_json,
-                                 uint32_t depth,
-                                 char **out,
-                                 uintptr_t *out_len);
-
-int cstx_graph_query_dsl(struct CstxGraph *g,
-                         const char *expression,
-                         intptr_t limit,
-                         uintptr_t offset,
-                         char **out,
-                         uintptr_t *out_len);
-
-char *cstx_graph_query_node_ids(struct CstxGraph *g,
-                                const char *expression,
-                                intptr_t limit,
-                                uintptr_t offset);
-
-int cstx_graph_is_path_expression(struct CstxGraph *g, const char *expression);
-
-char *cstx_graph_edges_filtered(struct CstxGraph *g,
-                                const char *source_id,
-                                const char *target_id,
-                                const char *relation);
-
-char *cstx_graph_export_snapshot_json(struct CstxGraph *g);
-
-int cstx_transform(const char *source_type,
-                   const uint8_t *data,
-                   uintptr_t data_len,
-                   char **out,
-                   uintptr_t *out_len);
-
-void cstx_free_string(char *s);
-
-const char *cstx_version(void);
-
-char *cstx_supported_artifacts(void);
-
-uint64_t cstx_flags_all_mask(void);
-
-uint64_t cstx_flags_default_exclude_mask(void);
-
-int cstx_graph_update_node_flags(struct CstxGraph *g,
-                                 const char *node_id,
-                                 uint64_t add,
-                                 uint64_t remove,
-                                 int64_t set_to);
-
-struct CstxCasStore *cstx_cas_store_new(void);
-
-void cstx_cas_store_free(struct CstxCasStore *s);
+typedef struct CstxSlice {
+  const uint8_t *data;
+  uintptr_t len;
+} CstxSlice;
 
 /**
- * Load a root tree object into the store.
- * kind: "root" | "map" — determines how to parse the JSON.
- * For "root": JSON is {"node_types":{"type":"hash",...},"edge_types":{...}}
- * For "map": JSON is {"key":"hash",...}
+ * Release a Rust-owned output or error buffer.
  */
-int cstx_cas_store_load_root(struct CstxCasStore *s, const char *hash, const char *json_str);
+void cstx_buffer_free(struct CstxBuffer *buffer);
 
-/**
- * Load a map (type-tree or bucket) object into the store.
- */
-int cstx_cas_store_load_map(struct CstxCasStore *s, const char *hash, const char *json_str);
+CstxStatusCode cstx_open(struct CstxSlice config_json,
+                         struct CstxHandle **output,
+                         struct CstxBuffer *error);
 
-/**
- * Export all tree objects from the store as JSON.
- * Returns: {"hash": {"key": "value", ...}, ...}
- */
-char *cstx_cas_store_export(struct CstxCasStore *s, const char *root_hash);
+void cstx_close(struct CstxHandle *handle);
 
-/**
- * SHA-256 of canonical JSON. Caller frees result.
- */
-char *cstx_cas_canonical_hash(const char *json_str);
+void cstx_free(struct CstxHandle *handle);
 
-/**
- * Build a Merkle tree from entries JSON.
- * entries_json: {"type": {"id": "hash", ...}, ...}
- * Returns root hash. Caller frees.
- */
-char *cstx_cas_tree_build(struct CstxCasStore *s, const char *entries_json);
+CstxStatusCode cstx_last_change_json(struct CstxHandle *handle,
+                                     struct CstxBuffer *output,
+                                     struct CstxBuffer *error);
 
-/**
- * Update a Merkle tree incrementally.
- * changes_json: {"type": {"id": "new_hash_or_null", ...}, ...}
- * null values = delete. Returns new root hash. Caller frees.
- */
-char *cstx_cas_tree_update(struct CstxCasStore *s, const char *root_hash, const char *changes_json);
+CstxStatusCode cstx_schema_register(struct CstxHandle *handle,
+                                    struct CstxSlice node_type,
+                                    struct CstxSlice schema_json,
+                                    struct CstxSlice value_field,
+                                    struct CstxBuffer *error);
 
-/**
- * Diff two Merkle trees. Returns JSON: {"added":{},"removed":{},"modified":{}}
- * Caller frees.
- */
-char *cstx_cas_tree_diff(struct CstxCasStore *s, const char *base_hash, const char *head_hash);
+CstxStatusCode cstx_schema_contains(struct CstxHandle *handle,
+                                    struct CstxSlice node_type,
+                                    uint8_t *output,
+                                    struct CstxBuffer *error);
 
-/**
- * Find an element in the tree by ID (searches all types).
- * Returns content hash or NULL if not found. Caller frees.
- */
-char *cstx_cas_tree_find(struct CstxCasStore *s, const char *root_hash, const char *element_id);
+CstxStatusCode cstx_schema_get_json(struct CstxHandle *handle,
+                                    struct CstxSlice node_type,
+                                    struct CstxBuffer *output,
+                                    struct CstxBuffer *error);
 
-/**
- * Materialize all entries from a tree.
- * Returns JSON: {"type": {"id": "hash", ...}, ...}. Caller frees.
- */
-char *cstx_cas_tree_entries(struct CstxCasStore *s, const char *root_hash);
+CstxStatusCode cstx_schema_load_plugin(struct CstxHandle *handle,
+                                       struct CstxSlice name,
+                                       struct CstxBuffer *error);
 
-int cstx_graph_semantic_texts(struct CstxGraph *g,
-                              const char *node_types_json,
-                              char **out,
-                              uintptr_t *out_len);
+CstxStatusCode cstx_schema_load_all_plugins(struct CstxHandle *handle, struct CstxBuffer *error);
 
-void cstx_graph_init_rag(struct CstxGraph *g, uintptr_t dims);
+CstxStatusCode cstx_schema_available_plugins_json(struct CstxHandle *handle,
+                                                  struct CstxBuffer *output,
+                                                  struct CstxBuffer *error);
 
-/**
- * entries_json: [[arena_idx, "node_type", [f32, ...]], ...]
- */
-int cstx_graph_set_vectors(struct CstxGraph *g,
-                           const char *entries_json,
-                           char **out,
-                           uintptr_t *out_len);
+CstxStatusCode cstx_graph_ingest(struct CstxHandle *handle,
+                                 struct CstxSlice source,
+                                 struct CstxSlice data,
+                                 uint64_t *affected,
+                                 struct CstxBuffer *error);
 
-int cstx_graph_build_indices(struct CstxGraph *g, char **out, uintptr_t *out_len);
+CstxStatusCode cstx_graph_node(struct CstxHandle *handle,
+                               struct CstxSlice node_id,
+                               struct CstxBuffer *output,
+                               struct CstxBuffer *error);
 
-/**
- * Returns JSON: [[arena_idx, score, "cstx_id"], ...]
- */
-int cstx_graph_rag_search(struct CstxGraph *g,
-                          const char *query_text,
-                          const char *query_vector_json,
-                          const char *strategy,
-                          const char *node_types_json,
-                          uintptr_t top_k,
-                          char **out,
-                          uintptr_t *out_len);
+CstxStatusCode cstx_graph_contains(struct CstxHandle *handle,
+                                   struct CstxSlice node_id,
+                                   uint8_t *output,
+                                   struct CstxBuffer *error);
 
-/**
- * Returns JSON: {"count": N, "modularity": f64}
- */
-int cstx_graph_detect_communities(struct CstxGraph *g,
-                                  double resolution,
-                                  uintptr_t min_community_size,
-                                  char **out,
-                                  uintptr_t *out_len);
+CstxStatusCode cstx_graph_stats(struct CstxHandle *handle,
+                                struct CstxBuffer *output,
+                                struct CstxBuffer *error);
 
-int cstx_graph_set_community_summary(struct CstxGraph *g,
-                                     uint32_t community_id,
-                                     const char *summary,
-                                     char **out,
-                                     uintptr_t *out_len);
+CstxStatusCode cstx_graph_nodes(struct CstxHandle *handle,
+                                struct CstxSlice filter_json,
+                                struct CstxSlice options_json,
+                                struct CstxNodeIterator **output,
+                                struct CstxBuffer *error);
 
-/**
- * Returns JSON array of arena indices: [u32, ...]
- */
-int cstx_graph_community_members(struct CstxGraph *g,
-                                 uint32_t community_id,
-                                 char **out,
-                                 uintptr_t *out_len);
+CstxStatusCode cstx_graph_edges(struct CstxHandle *handle,
+                                struct CstxSlice filter_json,
+                                struct CstxSlice options_json,
+                                struct CstxEdgeIterator **output,
+                                struct CstxBuffer *error);
+
+CstxStatusCode cstx_graph_neighbors(struct CstxHandle *handle,
+                                    struct CstxSlice node_id,
+                                    struct CstxSlice direction,
+                                    struct CstxSlice options_json,
+                                    struct CstxNodeIterator **output,
+                                    struct CstxBuffer *error);
+
+CstxStatusCode cstx_graph_query(struct CstxHandle *handle,
+                                struct CstxSlice expression,
+                                struct CstxSlice options_json,
+                                struct CstxNodeIterator **output,
+                                struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_commit(struct CstxHandle *handle,
+                                struct CstxSlice ref_name,
+                                struct CstxSlice message,
+                                struct CstxSlice metadata_json,
+                                struct CstxBuffer *output,
+                                struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_diff(struct CstxHandle *handle,
+                              struct CstxSlice base_ref,
+                              struct CstxSlice head_ref,
+                              struct CstxBuffer *output,
+                              struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_dump(struct CstxHandle *handle,
+                              struct CstxSlice compression,
+                              struct CstxBuffer *output,
+                              struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_load(struct CstxHandle *handle,
+                              struct CstxSlice data,
+                              struct CstxSlice compression,
+                              uint64_t *consumed,
+                              struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_dump_json(struct CstxHandle *handle,
+                                   struct CstxBuffer *output,
+                                   struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_load_json(struct CstxHandle *handle,
+                                   struct CstxSlice data,
+                                   uint64_t *consumed,
+                                   struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_snapshot_fingerprint(struct CstxHandle *handle,
+                                              struct CstxBuffer *output,
+                                              struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_head(struct CstxHandle *handle,
+                              struct CstxSlice ref_name,
+                              struct CstxBuffer *output,
+                              struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_refs(struct CstxHandle *handle,
+                              struct CstxBuffer *output,
+                              struct CstxBuffer *error);
 
 #endif  /* CSTX_FFI_H */

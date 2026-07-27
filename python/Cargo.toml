@@ -1,19 +1,16 @@
 [package]
 name = "cstxpy"
-version = "0.2.0"
-edition = "2021"
+version.workspace = true
+edition.workspace = true
+workspace = "../../cstx-core"
 
 [lib]
 name = "_cstxpy"
 crate-type = ["cdylib"]
 
 [dependencies]
-cstx-graph = { path = "../../cstx-core/crates/cstx-graph" }
-cstx-easm = { path = "../../cstx-core/crates/cstx-easm" }
-pyo3 = { version = "0.22", features = ["extension-module"] }
-serde_json = "1"
-smallvec = "1.13"
+cstx-core = { path = "../../cstx-core/crates/cstx-core", default-features = false, features = ["python"] }
+pyo3 = { workspace = true, features = ["extension-module", "abi3-py310", "generate-import-lib"] }
 
-[features]
-default = []
-abi3 = ["pyo3/abi3-py310"]
+[lints]
+workspace = true
