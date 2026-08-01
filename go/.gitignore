@@ -1,0 +1,6 @@
+# Prebuilt cstx-ffi static libraries are delivered by the cstx release
+# pipeline (synced with git add -f into libcstx), never built in-tree.
+lib/**/*.a
+lib/**/*.lib
+lib/**/*.so
+lib/**/*.dylib
