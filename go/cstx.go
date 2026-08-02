@@ -42,8 +42,7 @@ type CSTX struct {
 	closed bool
 }
 
-// Open creates an in-memory runtime. Without the cstx_native build tag it
-// returns ErrNativeUnavailable.
+// Open creates an in-memory native runtime.
 func Open(ctx context.Context, config Config) (*CSTX, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err

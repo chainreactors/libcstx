@@ -1,18 +1,19 @@
-//go:build cstx_native
-
 package cstx
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
 var testContext = context.Background()
+
+//go:embed testdata/v03_conformance.json
+var v03ConformanceFixture []byte
 
 var domainSchema = map[string]any{"properties": map[string]any{"domain": map[string]any{"type": "string"}}}
 
@@ -85,8 +86,23 @@ func TestSchemas(t *testing.T) {
 	if err != nil || len(list) == 0 {
 		t.Fatalf("list: %v %v", list, err)
 	}
-	if _, err := rt.Schemas.AvailablePlugins(testContext); err != nil {
+	plugins, err := rt.Schemas.AvailablePlugins(testContext)
+	if err != nil {
 		t.Fatalf("available plugins: %v", err)
+	}
+	if !reflect.DeepEqual(plugins, []string{"easm"}) {
+		t.Fatalf("available plugins: %v", plugins)
+	}
+	artifacts, err := rt.Schemas.PluginArtifacts(testContext, "easm")
+	if err != nil || !slices.Contains(artifacts, "gogo") {
+		t.Fatalf("easm artifacts: %v err=%v", artifacts, err)
+	}
+	if err := rt.Schemas.LoadPlugin(testContext, "easm"); err != nil {
+		t.Fatalf("load easm plugin: %v", err)
+	}
+	gogo := []byte(`{"ip":"192.0.2.1","port":"80","protocol":"tcp","status":"200"}` + "\n")
+	if affected, err := rt.Graph.Ingest(testContext, "gogo", gogo); err != nil || affected == 0 {
+		t.Fatalf("ingest gogo: affected=%d err=%v", affected, err)
 	}
 }
 
@@ -384,11 +400,7 @@ func TestCanonicalV03FixtureMatchesGoContract(t *testing.T) {
 			EdgeCount uint64   `json:"edge_count"`
 		} `json:"expected"`
 	}
-	payload, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "v03_conformance.json"))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	if err := json.Unmarshal(payload, &fixture); err != nil {
+	if err := json.Unmarshal(v03ConformanceFixture, &fixture); err != nil {
 		t.Fatalf("decode fixture: %v", err)
 	}
 
