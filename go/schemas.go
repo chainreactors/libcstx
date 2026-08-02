@@ -61,3 +61,12 @@ func (s *Schemas) AvailablePlugins(ctx context.Context) ([]string, error) {
 	}
 	return s.eng.schemaAvailablePlugins(ctx)
 }
+
+// PluginArtifacts lists artifacts provided by one linked plugin without
+// loading it into the runtime.
+func (s *Schemas) PluginArtifacts(ctx context.Context, name string) ([]string, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	return s.eng.schemaPluginArtifacts(ctx, name)
+}

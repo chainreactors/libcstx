@@ -58,6 +58,16 @@ def test_root_services_and_native_values():
     assert value.last_change()["updated_node_ids"] == []
 
 
+def test_easm_metadata_requires_explicit_loading():
+    value = CSTX()
+    assert "easm" in value.schemas.available_plugins()
+    assert "gogo" in value.schemas.plugin_artifacts("easm")
+    assert not value.schemas.has_native_artifact("gogo")
+
+    value.schemas.load_plugin("easm")
+    assert value.schemas.has_native_artifact("gogo")
+
+
 def test_cursor_filter_order_close_and_invalidation():
     value = db()
     value.graph.add_nodes([node("2.2.2.2"), node("1.1.1.1", flags=NodeFlags.HONEYPOT)])
@@ -339,6 +349,7 @@ def test_every_supported_api_has_runtime_documentation():
             "load_plugin",
             "load_all_plugins",
             "available_plugins",
+            "plugin_artifacts",
             "has_native_artifact",
             "anchor_concepts",
         ),

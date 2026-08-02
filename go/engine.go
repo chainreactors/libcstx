@@ -17,6 +17,7 @@ type engine interface {
 	schemaLoadPlugin(context.Context, string) error
 	schemaLoadAllPlugins(context.Context) error
 	schemaAvailablePlugins(context.Context) ([]string, error)
+	schemaPluginArtifacts(context.Context, string) ([]string, error)
 
 	graphAddNodes(context.Context, []Node) (uint64, error)
 	graphAddEdges(context.Context, []Edge) (uint64, error)

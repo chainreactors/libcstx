@@ -1,5 +1,3 @@
-//go:build cstx_native
-
 package cstx
 
 /*
@@ -289,6 +287,16 @@ func (e *nativeEngine) schemaAvailablePlugins(_ context.Context) ([]string, erro
 		return C.cstx_schema_available_plugins_json(e.handle, out, errBuf)
 	})
 	return plugins, err
+}
+
+func (e *nativeEngine) schemaPluginArtifacts(_ context.Context, name string) ([]string, error) {
+	var artifacts []string
+	err := jsonResult("schemas.plugin_artifacts", &artifacts, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_schema_plugin_artifacts_json(e.handle, stringSlice(name), out, errBuf)
+		runtime.KeepAlive(name)
+		return rc
+	})
+	return artifacts, err
 }
 
 // --- graph ---------------------------------------------------------------

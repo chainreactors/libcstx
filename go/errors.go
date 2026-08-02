@@ -26,9 +26,10 @@ const (
 	CodeInternal          Code = "INTERNAL"
 )
 
-// ErrNativeUnavailable is returned by every engine operation when the package
-// is compiled without the cstx_native build tag.
-var ErrNativeUnavailable = errors.New("cstx: native engine not compiled (build with -tags cstx_native)")
+// ErrNativeUnavailable is retained for source compatibility. Native support is
+// mandatory since v0.3.2, so new code should not expect this error.
+// Deprecated: the Go SDK always builds the native runtime.
+var ErrNativeUnavailable = errors.New("cstx: native engine unavailable")
 
 // Error is a stable CSTX failure whose fields can be handled without parsing
 // text. It mirrors the Rust CstxError contract.

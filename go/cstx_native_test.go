@@ -1,5 +1,3 @@
-//go:build cstx_native
-
 package cstx
 
 import (
@@ -9,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"testing"
 )
 
@@ -85,8 +84,23 @@ func TestSchemas(t *testing.T) {
 	if err != nil || len(list) == 0 {
 		t.Fatalf("list: %v %v", list, err)
 	}
-	if _, err := rt.Schemas.AvailablePlugins(testContext); err != nil {
+	plugins, err := rt.Schemas.AvailablePlugins(testContext)
+	if err != nil {
 		t.Fatalf("available plugins: %v", err)
+	}
+	if !reflect.DeepEqual(plugins, []string{"easm"}) {
+		t.Fatalf("available plugins: %v", plugins)
+	}
+	artifacts, err := rt.Schemas.PluginArtifacts(testContext, "easm")
+	if err != nil || !slices.Contains(artifacts, "gogo") {
+		t.Fatalf("easm artifacts: %v err=%v", artifacts, err)
+	}
+	if err := rt.Schemas.LoadPlugin(testContext, "easm"); err != nil {
+		t.Fatalf("load easm plugin: %v", err)
+	}
+	gogo := []byte(`{"ip":"192.0.2.1","port":"80","protocol":"tcp","status":"200"}` + "\n")
+	if affected, err := rt.Graph.Ingest(testContext, "gogo", gogo); err != nil || affected == 0 {
+		t.Fatalf("ingest gogo: affected=%d err=%v", affected, err)
 	}
 }
 

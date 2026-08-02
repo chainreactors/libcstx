@@ -104,6 +104,11 @@ CstxStatusCode cstx_schema_available_plugins_json(struct CstxHandle *handle,
                                                   struct CstxBuffer *output,
                                                   struct CstxBuffer *error);
 
+CstxStatusCode cstx_schema_plugin_artifacts_json(struct CstxHandle *handle,
+                                                 struct CstxSlice name,
+                                                 struct CstxBuffer *output,
+                                                 struct CstxBuffer *error);
+
 CstxStatusCode cstx_schema_register_join_rule(struct CstxHandle *handle,
                                               struct CstxSlice rule_json,
                                               struct CstxBuffer *error);
