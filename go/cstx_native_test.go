@@ -2,16 +2,18 @@ package cstx
 
 import (
 	"context"
+	_ "embed"
 	"encoding/json"
 	"errors"
-	"os"
-	"path/filepath"
 	"reflect"
 	"slices"
 	"testing"
 )
 
 var testContext = context.Background()
+
+//go:embed testdata/v03_conformance.json
+var v03ConformanceFixture []byte
 
 var domainSchema = map[string]any{"properties": map[string]any{"domain": map[string]any{"type": "string"}}}
 
@@ -398,11 +400,7 @@ func TestCanonicalV03FixtureMatchesGoContract(t *testing.T) {
 			EdgeCount uint64   `json:"edge_count"`
 		} `json:"expected"`
 	}
-	payload, err := os.ReadFile(filepath.Join("..", "..", "tests", "fixtures", "v03_conformance.json"))
-	if err != nil {
-		t.Fatalf("read fixture: %v", err)
-	}
-	if err := json.Unmarshal(payload, &fixture); err != nil {
+	if err := json.Unmarshal(v03ConformanceFixture, &fixture); err != nil {
 		t.Fatalf("decode fixture: %v", err)
 	}
 

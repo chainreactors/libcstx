@@ -1,0 +1,54 @@
+{
+  "schema": {
+    "node_type": "asset",
+    "json_schema": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "x-semantic": true,
+          "x-semantic-label": "name"
+        },
+        "status": {
+          "type": "string",
+          "x-semantic": false
+        }
+      }
+    },
+    "value_field": "name"
+  },
+  "nodes": [
+    {
+      "id": "asset:beta",
+      "type": "asset",
+      "value": "beta",
+      "model": {"name": "beta", "status": "active"},
+      "sources": ["fixture"],
+      "extras": {}
+    },
+    {
+      "id": "asset:alpha",
+      "type": "asset",
+      "value": "alpha",
+      "model": {"name": "alpha", "status": "active"},
+      "sources": ["fixture"],
+      "extras": {}
+    }
+  ],
+  "edges": [
+    {
+      "id": "relationship:asset:alpha:related:asset:beta",
+      "source_id": "asset:alpha",
+      "target_id": "asset:beta",
+      "relation_type": "related",
+      "sources": ["fixture"],
+      "attrs": {}
+    }
+  ],
+  "query": "asset",
+  "expected": {
+    "node_ids": ["asset:beta", "asset:alpha"],
+    "node_count": 2,
+    "edge_count": 1,
+    "pending_embedding_ids": ["asset:alpha", "asset:beta"]
+  }
+}
