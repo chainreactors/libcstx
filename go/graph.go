@@ -135,3 +135,19 @@ func (g *Graph) Subgraph(ctx context.Context, seedIDs []string, depth uint32) (*
 	}
 	return wrapRuntime(eng, "derived"), nil
 }
+
+// Difference returns an independently owned runtime containing this graph
+// minus nodes of nodeType present in other. The caller must close it.
+func (g *Graph) Difference(ctx context.Context, other *CSTX, nodeType string) (*CSTX, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	if other == nil {
+		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.difference", Message: "other runtime is required"}
+	}
+	eng, err := g.eng.graphDifference(ctx, other.eng, nodeType)
+	if err != nil {
+		return nil, err
+	}
+	return wrapRuntime(eng, "derived"), nil
+}
