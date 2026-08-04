@@ -1,6 +1,9 @@
 package cstx
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+)
 
 // engine is the internal boundary between the typed facade and the transport
 // implementation. The native build implements it over the cstx-ffi C ABI; the
@@ -32,6 +35,7 @@ type engine interface {
 	graphNeighbors(context.Context, string, string, CollectionOptions) (nodeIter, error)
 	graphQuery(context.Context, string, QueryOptions) (nodeIter, error)
 	graphSubgraph(context.Context, []string, uint32) (engine, error)
+	graphDifference(context.Context, engine, string) (engine, error)
 
 	repoCommit(context.Context, string, string, any) (Commit, error)
 	repoDiff(context.Context, string, string) (GraphDiff, error)
@@ -42,6 +46,16 @@ type engine interface {
 	repoSnapshotFingerprint(context.Context) (string, error)
 	repoHead(context.Context, string) (*string, error)
 	repoRefs(context.Context) ([]Ref, error)
+	repoCommitDelta(context.Context, CommitDeltaRequest) (Commit, error)
+	repoSetRef(context.Context, string, string) error
+	repoImportCommit(context.Context, string, json.RawMessage) error
+	repoExportCommit(context.Context, string) (json.RawMessage, error)
+	repoExportTreeObjects(context.Context, string) (json.RawMessage, error)
+	repoImportTreeObjects(context.Context, json.RawMessage) error
+	repoTreeEntries(context.Context, string, []string) (map[string]map[string]string, error)
+	repoFindTreeEntry(context.Context, string, string) (*string, error)
+	repoDiffTreeEntries(context.Context, string, string) (TreeEntryDiff, error)
+	repoTreeRootStats(context.Context, string) (map[string]int64, error)
 }
 
 // nodeIter yields one node at a time from the native runtime. ok is false at

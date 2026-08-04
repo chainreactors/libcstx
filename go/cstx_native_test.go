@@ -169,6 +169,28 @@ func TestGraphMutationAndCursors(t *testing.T) {
 	}
 }
 
+func TestGraphDifference(t *testing.T) {
+	rt := openRuntime(t)
+	addDomain(t, rt, "example.com")
+	addDomain(t, rt, "www.example.com")
+	remove, err := rt.Graph.Subgraph(testContext, []string{"domain:www.example.com"}, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer remove.Close()
+	result, err := rt.Graph.Difference(testContext, remove, "domain")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer result.Close()
+	if count, err := result.Graph.NodeCount(testContext); err != nil || count != 1 {
+		t.Fatalf("difference count=%d err=%v", count, err)
+	}
+	if exists, err := result.Graph.Contains(testContext, "domain:www.example.com"); err != nil || exists {
+		t.Fatalf("removed node exists=%v err=%v", exists, err)
+	}
+}
+
 func TestCursorInvalidation(t *testing.T) {
 	rt := openRuntime(t)
 	addDomain(t, rt, "example.com")

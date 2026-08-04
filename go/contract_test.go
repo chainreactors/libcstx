@@ -42,6 +42,14 @@ func TestEdgeMatchesTransportContract(t *testing.T) {
 	}
 }
 
+func TestCASIndexMatchesTransportContract(t *testing.T) {
+	got := jsonFieldNames(t, CASIndex{})
+	want := []string{"entries", "objects"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("CAS index fields drifted from Rust contract: got %v want %v", got, want)
+	}
+}
+
 func TestQueryOptionsMatchesRustTransportContract(t *testing.T) {
 	got := jsonFieldNames(t, QueryOptions{})
 	want := []string{"collection", "exclude_mask", "include_mask", "offset"}

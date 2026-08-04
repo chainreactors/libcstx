@@ -429,6 +429,23 @@ func (e *nativeEngine) graphQuery(_ context.Context, expression string, options 
 	return newNodeIter(iter), nil
 }
 
+func (e *nativeEngine) graphDifference(_ context.Context, other engine, nodeType string) (engine, error) {
+	right, ok := other.(*nativeEngine)
+	if !ok || right == nil || right.handle == nil {
+		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.difference", Message: "other runtime is invalid"}
+	}
+	var output *C.CstxHandle
+	err := statusCall("graph.difference", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_difference(e.handle, right.handle, stringSlice(nodeType), &output, errBuf)
+		runtime.KeepAlive(nodeType)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &nativeEngine{handle: output}, nil
+}
+
 // --- repository ----------------------------------------------------------
 
 func (e *nativeEngine) repoCommit(_ context.Context, refName, message string, metadata any) (Commit, error) {
@@ -523,6 +540,122 @@ func (e *nativeEngine) repoRefs(_ context.Context) ([]Ref, error) {
 		return C.cstx_repo_refs(e.handle, out, errBuf)
 	})
 	return refs, err
+}
+
+func (e *nativeEngine) repoCommitDelta(_ context.Context, request CommitDeltaRequest) (Commit, error) {
+	parent, err := e.repoHead(context.Background(), request.RefName)
+	if err != nil {
+		return Commit{}, err
+	}
+	requestJSON := marshal(request)
+	var result struct {
+		CommitHash string `json:"commit_hash"`
+		TreeHash   string `json:"tree_hash"`
+		Stats      any    `json:"stats"`
+	}
+	err = jsonResult("repo.commit_delta", &result, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_commit_delta_json(e.handle, byteSlice(requestJSON), out, errBuf)
+		runtime.KeepAlive(requestJSON)
+		return rc
+	})
+	if err != nil {
+		return Commit{}, err
+	}
+	parentHash := ""
+	if parent != nil {
+		parentHash = *parent
+	}
+	return Commit{
+		ID: result.CommitHash, Tree: result.TreeHash, Parent: parentHash,
+		Message: request.Message, Metadata: request.Metadata, Stats: result.Stats,
+		CreatedAt: request.CreatedAt,
+	}, nil
+}
+
+func (e *nativeEngine) repoSetRef(_ context.Context, refName, commitHash string) error {
+	return statusCall("repo.set_ref", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_set_ref(e.handle, stringSlice(refName), stringSlice(commitHash), errBuf)
+		runtime.KeepAlive(refName)
+		runtime.KeepAlive(commitHash)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoImportCommit(_ context.Context, hash string, data json.RawMessage) error {
+	return statusCall("repo.import_commit", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_import_commit(e.handle, stringSlice(hash), byteSlice(data), errBuf)
+		runtime.KeepAlive(hash)
+		runtime.KeepAlive(data)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoExportCommit(_ context.Context, hash string) (json.RawMessage, error) {
+	return bufferResult("repo.export_commit", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_export_commit_json(e.handle, stringSlice(hash), out, errBuf)
+		runtime.KeepAlive(hash)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoExportTreeObjects(_ context.Context, rootHash string) (json.RawMessage, error) {
+	return bufferResult("repo.export_tree_objects", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_export_tree_objects_json(e.handle, stringSlice(rootHash), out, errBuf)
+		runtime.KeepAlive(rootHash)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoImportTreeObjects(_ context.Context, objects json.RawMessage) error {
+	return statusCall("repo.import_tree_objects", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_import_tree_objects(e.handle, byteSlice(objects), errBuf)
+		runtime.KeepAlive(objects)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoTreeEntries(_ context.Context, rootHash string, types []string) (map[string]map[string]string, error) {
+	typesJSON := marshal(orEmpty(types))
+	var entries map[string]map[string]string
+	err := jsonResult("repo.tree_entries", &entries, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_tree_entries_json(e.handle, stringSlice(rootHash), byteSlice(typesJSON), out, errBuf)
+		runtime.KeepAlive(rootHash)
+		runtime.KeepAlive(typesJSON)
+		return rc
+	})
+	return entries, err
+}
+
+func (e *nativeEngine) repoFindTreeEntry(_ context.Context, rootHash, elementID string) (*string, error) {
+	var hash *string
+	err := jsonResult("repo.find_tree_entry", &hash, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_find_tree_entry_json(e.handle, stringSlice(rootHash), stringSlice(elementID), out, errBuf)
+		runtime.KeepAlive(rootHash)
+		runtime.KeepAlive(elementID)
+		return rc
+	})
+	return hash, err
+}
+
+func (e *nativeEngine) repoDiffTreeEntries(_ context.Context, baseRoot, headRoot string) (TreeEntryDiff, error) {
+	var diff TreeEntryDiff
+	err := jsonResult("repo.diff_tree_entries", &diff, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_diff_tree_entries_json(e.handle, stringSlice(baseRoot), stringSlice(headRoot), out, errBuf)
+		runtime.KeepAlive(baseRoot)
+		runtime.KeepAlive(headRoot)
+		return rc
+	})
+	return diff, err
+}
+
+func (e *nativeEngine) repoTreeRootStats(_ context.Context, rootHash string) (map[string]int64, error) {
+	var stats map[string]int64
+	err := jsonResult("repo.tree_root_stats", &stats, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_tree_root_stats_json(e.handle, stringSlice(rootHash), out, errBuf)
+		runtime.KeepAlive(rootHash)
+		return rc
+	})
+	return stats, err
 }
 
 // --- iterators -----------------------------------------------------------

@@ -123,6 +123,33 @@ type GraphDiff struct {
 	Modified map[string][]string `json:"modified"`
 }
 
+// CASIndex contains canonical graph entries and their serialized immutable
+// objects. Object bytes remain raw so storage adapters do not deserialize and
+// reserialize data at the language boundary.
+type CASIndex struct {
+	Entries map[string]map[string]string `json:"entries"`
+	Objects map[string]json.RawMessage   `json:"objects"`
+}
+
+// CommitDeltaRequest commits pre-indexed element hashes and removals onto a ref.
+// The referenced objects must already exist in the repository object store.
+type CommitDeltaRequest struct {
+	DeltaEntries   map[string]map[string]string `json:"delta_entries"`
+	RemovedNodeIDs []string                     `json:"removed_node_ids"`
+	RemovedEdgeIDs []string                     `json:"removed_edge_ids"`
+	RefName        string                       `json:"ref_name"`
+	Message        string                       `json:"message"`
+	Metadata       any                          `json:"metadata"`
+	CreatedAt      int64                        `json:"created_at"`
+}
+
+// TreeEntryChange contains the base and head content hashes for one element.
+// A nil side means the element is absent from that tree.
+type TreeEntryChange [2]*string
+
+// TreeEntryDiff groups raw content-hash changes by element type and ID.
+type TreeEntryDiff map[string]map[string]TreeEntryChange
+
 // Ref is one named repository reference and its commit ID.
 type Ref struct {
 	Name string
