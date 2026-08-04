@@ -8,6 +8,27 @@ import (
 // Repository is the snapshot/version namespace of a CSTX runtime.
 type Repository struct{ eng engine }
 
+// IndexGraph derives canonical content hashes and raw CAS objects from the
+// current graph using the native repository implementation.
+func (r *Repository) IndexGraph(ctx context.Context) (CASIndex, error) {
+	if err := contextError(ctx); err != nil {
+		return CASIndex{}, err
+	}
+	raw, ok := r.eng.(rawEngine)
+	if !ok {
+		return CASIndex{}, &Error{Code: CodeNotInitialized, Operation: "repo.index_graph", Message: "native repository transport is unavailable"}
+	}
+	data, err := raw.rawRepositoryIndexGraph(ctx)
+	if err != nil {
+		return CASIndex{}, err
+	}
+	var index CASIndex
+	if err := json.Unmarshal(data, &index); err != nil {
+		return CASIndex{}, &Error{Code: CodeParse, Operation: "repo.index_graph", Message: err.Error()}
+	}
+	return index, nil
+}
+
 // Commit writes the current graph content to a named repository ref.
 func (r *Repository) Commit(ctx context.Context, refName, message string, metadata any) (Commit, error) {
 	if err := contextError(ctx); err != nil {

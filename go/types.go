@@ -123,6 +123,14 @@ type GraphDiff struct {
 	Modified map[string][]string `json:"modified"`
 }
 
+// CASIndex contains canonical graph entries and their serialized immutable
+// objects. Object bytes remain raw so storage adapters do not deserialize and
+// reserialize data at the language boundary.
+type CASIndex struct {
+	Entries map[string]map[string]string `json:"entries"`
+	Objects map[string]json.RawMessage   `json:"objects"`
+}
+
 // CommitDeltaRequest commits pre-indexed element hashes and removals onto a ref.
 // The referenced objects must already exist in the repository object store.
 type CommitDeltaRequest struct {
