@@ -35,11 +35,9 @@ typedef enum CstxStatusCode CstxStatusCode;
 typedef int32_t CstxStatusCode;
 #endif // __STDC_VERSION__ >= 202311L
 
-typedef struct CstxEdgeIterator CstxEdgeIterator;
+typedef struct CstxGraphCursor CstxGraphCursor;
 
 typedef struct CstxHandle CstxHandle;
-
-typedef struct CstxNodeIterator CstxNodeIterator;
 
 typedef struct CstxRagIndexSession CstxRagIndexSession;
 
@@ -66,8 +64,6 @@ CstxStatusCode cstx_open(struct CstxSlice config_json,
                          struct CstxHandle **output,
                          struct CstxBuffer *error);
 
-void cstx_close(struct CstxHandle *handle);
-
 void cstx_free(struct CstxHandle *handle);
 
 CstxStatusCode cstx_last_change_json(struct CstxHandle *handle,
@@ -79,6 +75,14 @@ CstxStatusCode cstx_schema_register(struct CstxHandle *handle,
                                     struct CstxSlice schema_json,
                                     struct CstxSlice value_field,
                                     struct CstxBuffer *error);
+
+CstxStatusCode cstx_schema_import_schema(struct CstxHandle *handle,
+                                         struct CstxSlice contract_json,
+                                         struct CstxBuffer *error);
+
+CstxStatusCode cstx_schema_export_schema_json(struct CstxHandle *handle,
+                                              struct CstxBuffer *output,
+                                              struct CstxBuffer *error);
 
 CstxStatusCode cstx_schema_contains(struct CstxHandle *handle,
                                     struct CstxSlice node_type,
@@ -132,16 +136,6 @@ CstxStatusCode cstx_graph_add_edges(struct CstxHandle *handle,
                                     uint64_t *affected,
                                     struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_add_nodes_json(struct CstxHandle *handle,
-                                         struct CstxSlice data,
-                                         uint64_t *affected,
-                                         struct CstxBuffer *error);
-
-CstxStatusCode cstx_graph_add_edges_json(struct CstxHandle *handle,
-                                         struct CstxSlice data,
-                                         uint64_t *affected,
-                                         struct CstxBuffer *error);
-
 CstxStatusCode cstx_graph_ingest(struct CstxHandle *handle,
                                  struct CstxSlice source,
                                  struct CstxSlice data,
@@ -150,6 +144,11 @@ CstxStatusCode cstx_graph_ingest(struct CstxHandle *handle,
 
 CstxStatusCode cstx_graph_node(struct CstxHandle *handle,
                                struct CstxSlice node_id,
+                               struct CstxBuffer *output,
+                               struct CstxBuffer *error);
+
+CstxStatusCode cstx_graph_edge(struct CstxHandle *handle,
+                               struct CstxSlice edge_id,
                                struct CstxBuffer *output,
                                struct CstxBuffer *error);
 
@@ -166,33 +165,29 @@ CstxStatusCode cstx_graph_edge_count(struct CstxHandle *handle,
                                      uint64_t *output,
                                      struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_stats(struct CstxHandle *handle,
-                                struct CstxBuffer *output,
-                                struct CstxBuffer *error);
-
 CstxStatusCode cstx_graph_nodes(struct CstxHandle *handle,
                                 struct CstxSlice filter_json,
                                 struct CstxSlice options_json,
-                                struct CstxNodeIterator **output,
+                                struct CstxGraphCursor **output,
                                 struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_edges(struct CstxHandle *handle,
                                 struct CstxSlice filter_json,
                                 struct CstxSlice options_json,
-                                struct CstxEdgeIterator **output,
+                                struct CstxGraphCursor **output,
                                 struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_neighbors(struct CstxHandle *handle,
                                     struct CstxSlice node_id,
                                     struct CstxSlice direction,
                                     struct CstxSlice options_json,
-                                    struct CstxNodeIterator **output,
+                                    struct CstxGraphCursor **output,
                                     struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_query(struct CstxHandle *handle,
                                 struct CstxSlice expression,
                                 struct CstxSlice options_json,
-                                struct CstxNodeIterator **output,
+                                struct CstxGraphCursor **output,
                                 struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_ingest_native_json(struct CstxHandle *handle,
@@ -201,16 +196,6 @@ CstxStatusCode cstx_graph_ingest_native_json(struct CstxHandle *handle,
                                              struct CstxSlice data,
                                              struct CstxBuffer *output,
                                              struct CstxBuffer *error);
-
-CstxStatusCode cstx_graph_hydrate_cas_nodes(struct CstxHandle *handle,
-                                            struct CstxSlice items_json,
-                                            uint64_t *affected,
-                                            struct CstxBuffer *error);
-
-CstxStatusCode cstx_graph_hydrate_cas_edges(struct CstxHandle *handle,
-                                            struct CstxSlice items_json,
-                                            uint64_t *affected,
-                                            struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_find_node_json(struct CstxHandle *handle,
                                          struct CstxSlice identifier,
@@ -237,6 +222,11 @@ CstxStatusCode cstx_graph_union(struct CstxHandle *left,
                                 struct CstxHandle **output,
                                 struct CstxBuffer *error);
 
+CstxStatusCode cstx_graph_merge(struct CstxHandle *target,
+                                struct CstxHandle *source,
+                                uint64_t *affected,
+                                struct CstxBuffer *error);
+
 CstxStatusCode cstx_graph_difference(struct CstxHandle *left,
                                      struct CstxHandle *right,
                                      struct CstxSlice node_type,
@@ -258,19 +248,13 @@ CstxStatusCode cstx_graph_update_node_flags(struct CstxHandle *handle,
                                             uint64_t *affected,
                                             struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_bfs_json(struct CstxHandle *handle,
-                                   struct CstxSlice seed_id,
-                                   uint32_t depth,
-                                   uint8_t reverse,
-                                   struct CstxBuffer *output,
-                                   struct CstxBuffer *error);
-
-CstxStatusCode cstx_graph_shortest_paths_json(struct CstxHandle *handle,
-                                              struct CstxSlice start_id,
-                                              struct CstxSlice end_id,
-                                              uint32_t max_depth,
-                                              struct CstxBuffer *output,
-                                              struct CstxBuffer *error);
+CstxStatusCode cstx_graph_analyze(struct CstxHandle *handle,
+                                  struct CstxSlice algorithm_json,
+                                  struct CstxSlice selection,
+                                  uint8_t *kind,
+                                  uint8_t *boolean,
+                                  struct CstxGraphCursor **cursor,
+                                  struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_degree(struct CstxHandle *handle,
                                  struct CstxSlice node_id,
@@ -315,11 +299,11 @@ CstxStatusCode cstx_graph_elevate(struct CstxHandle *handle,
                                   struct CstxHandle **output,
                                   struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_stats_filtered_json(struct CstxHandle *handle,
-                                              uint64_t exclude_mask,
-                                              uint64_t include_mask,
-                                              struct CstxBuffer *output,
-                                              struct CstxBuffer *error);
+CstxStatusCode cstx_graph_stats(struct CstxHandle *handle,
+                                uint64_t exclude_mask,
+                                uint64_t include_mask,
+                                struct CstxBuffer *output,
+                                struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_nodes_page_json(struct CstxHandle *handle,
                                           struct CstxSlice request_json,
@@ -351,27 +335,29 @@ CstxStatusCode cstx_graph_query_json(struct CstxHandle *handle,
                                      struct CstxBuffer *output,
                                      struct CstxBuffer *error);
 
-CstxStatusCode cstx_node_iterator_next(struct CstxNodeIterator *cursor,
-                                       struct CstxBuffer *output,
-                                       uint8_t *has_value,
-                                       struct CstxBuffer *error);
+CstxStatusCode cstx_graph_cursor_page(struct CstxGraphCursor *cursor,
+                                      size_t limit,
+                                      size_t page,
+                                      struct CstxBuffer *output,
+                                      struct CstxBuffer *error);
 
-void cstx_node_iterator_close(struct CstxNodeIterator *cursor);
+void cstx_graph_cursor_free(struct CstxGraphCursor *cursor);
 
-void cstx_node_iterator_free(struct CstxNodeIterator *cursor);
+CstxStatusCode cstx_repo_resolve(struct CstxHandle *handle,
+                                 struct CstxSlice revision,
+                                 struct CstxBuffer *output,
+                                 struct CstxBuffer *error);
 
-CstxStatusCode cstx_edge_iterator_next(struct CstxEdgeIterator *cursor,
-                                       struct CstxBuffer *output,
-                                       uint8_t *has_value,
-                                       struct CstxBuffer *error);
-
-void cstx_edge_iterator_close(struct CstxEdgeIterator *cursor);
-
-void cstx_edge_iterator_free(struct CstxEdgeIterator *cursor);
+CstxStatusCode cstx_repo_checkout(struct CstxHandle *handle,
+                                  struct CstxSlice revision,
+                                  uint8_t force,
+                                  struct CstxBuffer *output,
+                                  struct CstxBuffer *error);
 
 CstxStatusCode cstx_repo_commit(struct CstxHandle *handle,
-                                struct CstxSlice ref_name,
                                 struct CstxSlice message,
+                                struct CstxSlice ref_name,
+                                struct CstxSlice expected_head,
                                 struct CstxSlice metadata_json,
                                 struct CstxBuffer *output,
                                 struct CstxBuffer *error);
@@ -379,149 +365,65 @@ CstxStatusCode cstx_repo_commit(struct CstxHandle *handle,
 CstxStatusCode cstx_repo_diff(struct CstxHandle *handle,
                               struct CstxSlice base_ref,
                               struct CstxSlice head_ref,
+                              size_t limit,
+                              uint8_t has_limit,
                               struct CstxBuffer *output,
                               struct CstxBuffer *error);
 
-CstxStatusCode cstx_repo_dump(struct CstxHandle *handle,
-                              struct CstxSlice compression,
-                              struct CstxBuffer *output,
-                              struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_load(struct CstxHandle *handle,
-                              struct CstxSlice data,
-                              struct CstxSlice compression,
-                              uint64_t *consumed,
-                              struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_dump_json(struct CstxHandle *handle,
+CstxStatusCode cstx_repo_diff_stat(struct CstxHandle *handle,
+                                   struct CstxSlice base_ref,
+                                   struct CstxSlice head_ref,
                                    struct CstxBuffer *output,
                                    struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_load_json(struct CstxHandle *handle,
-                                   struct CstxSlice data,
-                                   uint64_t *consumed,
-                                   struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_snapshot_fingerprint(struct CstxHandle *handle,
-                                              struct CstxBuffer *output,
-                                              struct CstxBuffer *error);
 
 CstxStatusCode cstx_repo_head(struct CstxHandle *handle,
                               struct CstxSlice ref_name,
                               struct CstxBuffer *output,
                               struct CstxBuffer *error);
 
-CstxStatusCode cstx_repo_refs(struct CstxHandle *handle,
+CstxStatusCode cstx_repo_log(struct CstxHandle *handle,
+                             struct CstxSlice revision,
+                             size_t limit,
+                             struct CstxBuffer *output,
+                             struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_history(struct CstxHandle *handle,
+                                 struct CstxSlice entity_id,
+                                 struct CstxSlice revision,
+                                 size_t limit,
+                                 uint8_t has_limit,
+                                 struct CstxBuffer *output,
+                                 struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_branch(struct CstxHandle *handle,
+                                struct CstxSlice name,
+                                struct CstxSlice start_point,
+                                struct CstxBuffer *output,
+                                struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_merge(struct CstxHandle *handle,
+                               struct CstxSlice source,
+                               struct CstxSlice target,
+                               struct CstxSlice expected_head,
+                               struct CstxSlice message,
+                               struct CstxBuffer *output,
+                               struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_stat(struct CstxHandle *handle,
+                              struct CstxSlice revision,
+                              uint64_t exclude_mask,
+                              uint64_t include_mask,
                               struct CstxBuffer *output,
                               struct CstxBuffer *error);
 
-CstxStatusCode cstx_repo_index_graph_json(struct CstxHandle *handle,
-                                          struct CstxBuffer *output,
-                                          struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_validate_ref(struct CstxHandle *handle,
-                                      struct CstxSlice ref_name,
-                                      struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_delete_ref(struct CstxHandle *handle,
-                                    struct CstxSlice ref_name,
-                                    struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_set_ref(struct CstxHandle *handle,
-                                 struct CstxSlice ref_name,
-                                 struct CstxSlice commit_hash,
-                                 struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_fork_json(struct CstxHandle *handle,
-                                   struct CstxSlice source,
-                                   struct CstxSlice target,
-                                   struct CstxBuffer *output,
-                                   struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_checkout_entries_json(struct CstxHandle *handle,
-                                               struct CstxSlice ref_name,
-                                               struct CstxSlice types_json,
-                                               struct CstxBuffer *output,
-                                               struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_commit_entries_json(struct CstxHandle *handle,
-                                             struct CstxSlice request_json,
-                                             struct CstxBuffer *output,
-                                             struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_commit_delta_json(struct CstxHandle *handle,
-                                           struct CstxSlice request_json,
-                                           struct CstxBuffer *output,
-                                           struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_merge_json(struct CstxHandle *handle,
-                                    struct CstxSlice request_json,
-                                    struct CstxBuffer *output,
-                                    struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_merge_base_json(struct CstxHandle *handle,
-                                         struct CstxSlice ref_a,
-                                         struct CstxSlice ref_b,
-                                         struct CstxBuffer *output,
-                                         struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_log_json(struct CstxHandle *handle,
-                                  struct CstxSlice ref_name,
-                                  size_t limit,
-                                  struct CstxBuffer *output,
-                                  struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_tree_stats_json(struct CstxHandle *handle,
-                                         struct CstxSlice ref_name,
-                                         struct CstxBuffer *output,
-                                         struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_cherry_pick_json(struct CstxHandle *handle,
-                                          struct CstxSlice request_json,
-                                          struct CstxBuffer *output,
-                                          struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_import_commit(struct CstxHandle *handle,
-                                       struct CstxSlice hash,
-                                       struct CstxSlice data_json,
-                                       struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_export_commit_json(struct CstxHandle *handle,
-                                            struct CstxSlice hash,
-                                            struct CstxBuffer *output,
-                                            struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_export_tree_objects_json(struct CstxHandle *handle,
-                                                  struct CstxSlice root_hash,
-                                                  struct CstxBuffer *output,
-                                                  struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_import_tree_objects(struct CstxHandle *handle,
-                                             struct CstxSlice objects_json,
-                                             struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_tree_entries_json(struct CstxHandle *handle,
-                                           struct CstxSlice root_hash,
-                                           struct CstxSlice types_json,
-                                           struct CstxBuffer *output,
-                                           struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_find_tree_entry_json(struct CstxHandle *handle,
-                                              struct CstxSlice root_hash,
-                                              struct CstxSlice element_id,
-                                              struct CstxBuffer *output,
-                                              struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_diff_tree_entries_json(struct CstxHandle *handle,
-                                                struct CstxSlice base_root,
-                                                struct CstxSlice head_root,
-                                                struct CstxBuffer *output,
-                                                struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_tree_root_stats_json(struct CstxHandle *handle,
-                                              struct CstxSlice root_hash,
-                                              struct CstxBuffer *output,
-                                              struct CstxBuffer *error);
+CstxStatusCode cstx_repo_delta(struct CstxHandle *handle,
+                               struct CstxSlice revision,
+                               int64_t start_timestamp,
+                               uint8_t has_start_timestamp,
+                               int64_t end_timestamp,
+                               uint8_t has_end_timestamp,
+                               struct CstxBuffer *output,
+                               struct CstxBuffer *error);
 
 CstxStatusCode cstx_rag_index(struct CstxHandle *handle,
                               struct CstxSlice request_json,

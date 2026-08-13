@@ -1,4 +1,4 @@
-"""Cross-language checks backed by the canonical v0.3 fixture."""
+"""Cross-language checks backed by the CSTX conformance fixture."""
 
 import json
 from pathlib import Path
@@ -6,8 +6,8 @@ from pathlib import Path
 import cstxpy
 
 
-def test_canonical_v03_fixture_matches_python_contract() -> None:
-    fixture_path = Path(__file__).resolve().parents[3] / "tests/fixtures/v03_conformance.json"
+def test_conformance_fixture_matches_python_contract() -> None:
+    fixture_path = Path(__file__).resolve().parents[3] / "tests/fixtures/conformance.json"
     fixture = json.loads(fixture_path.read_text(encoding="utf-8"))
     runtime = cstxpy.CSTX()
     schema = fixture["schema"]

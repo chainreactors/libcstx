@@ -1,94 +1,17 @@
 package cstx
 
-import (
-	"context"
-	"encoding/json"
-)
+import "context"
 
-// Repository is the snapshot/version namespace of a CSTX runtime.
+// Repository is the Git-like version namespace of one CSTX working tree.
 type Repository struct{ eng engine }
 
-// IndexGraph derives canonical content hashes and raw CAS objects from the
-// current graph using the native repository implementation.
-func (r *Repository) IndexGraph(ctx context.Context) (CASIndex, error) {
-	if err := contextError(ctx); err != nil {
-		return CASIndex{}, err
-	}
-	raw, ok := r.eng.(rawEngine)
-	if !ok {
-		return CASIndex{}, &Error{Code: CodeNotInitialized, Operation: "repo.index_graph", Message: "native repository transport is unavailable"}
-	}
-	data, err := raw.rawRepositoryIndexGraph(ctx)
-	if err != nil {
-		return CASIndex{}, err
-	}
-	var index CASIndex
-	if err := json.Unmarshal(data, &index); err != nil {
-		return CASIndex{}, &Error{Code: CodeParse, Operation: "repo.index_graph", Message: err.Error()}
-	}
-	return index, nil
-}
-
-// Commit writes the current graph content to a named repository ref.
-func (r *Repository) Commit(ctx context.Context, refName, message string, metadata any) (Commit, error) {
-	if err := contextError(ctx); err != nil {
-		return Commit{}, err
-	}
-	return r.eng.repoCommit(ctx, refName, message, metadata)
-}
-
-// Diff returns added, removed, and modified IDs between two refs.
-func (r *Repository) Diff(ctx context.Context, baseRef, headRef string) (GraphDiff, error) {
-	if err := contextError(ctx); err != nil {
-		return GraphDiff{}, err
-	}
-	return r.eng.repoDiff(ctx, baseRef, headRef)
-}
-
-// Dump returns a compact snapshot byte container. Compression is for example
-// "zstd1"; an empty string selects the runtime default.
-func (r *Repository) Dump(ctx context.Context, compression string) ([]byte, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoDump(ctx, compression)
-}
-
-// Load replaces graph state from a compact snapshot and reports the number
-// of bytes consumed.
-func (r *Repository) Load(ctx context.Context, data []byte, compression string) (uint64, error) {
-	if err := contextError(ctx); err != nil {
-		return 0, err
-	}
-	return r.eng.repoLoad(ctx, data, compression)
-}
-
-// DumpJSON returns canonical JSON snapshot bytes for interoperability.
-func (r *Repository) DumpJSON(ctx context.Context) ([]byte, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoDumpJSON(ctx)
-}
-
-// LoadJSON loads canonical JSON snapshot bytes and reports bytes consumed.
-func (r *Repository) LoadJSON(ctx context.Context, data []byte) (uint64, error) {
-	if err := contextError(ctx); err != nil {
-		return 0, err
-	}
-	return r.eng.repoLoadJSON(ctx, data)
-}
-
-// SnapshotFingerprint returns a stable hash of the canonical snapshot.
-func (r *Repository) SnapshotFingerprint(ctx context.Context) (string, error) {
+func (r *Repository) Resolve(ctx context.Context, revision string) (string, error) {
 	if err := contextError(ctx); err != nil {
 		return "", err
 	}
-	return r.eng.repoSnapshotFingerprint(ctx)
+	return r.eng.repoResolve(ctx, revision)
 }
 
-// Head returns the commit ID of one named ref, or nil when the ref does not
-// exist.
 func (r *Repository) Head(ctx context.Context, refName string) (*string, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
@@ -96,104 +19,122 @@ func (r *Repository) Head(ctx context.Context, refName string) (*string, error) 
 	return r.eng.repoHead(ctx, refName)
 }
 
-// Refs lists repository refs without exposing Merkle internals.
-func (r *Repository) Refs(ctx context.Context) ([]Ref, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoRefs(ctx)
-}
-
-// CommitDelta applies pre-indexed changes and removals to a repository ref.
-func (r *Repository) CommitDelta(ctx context.Context, request CommitDeltaRequest) (Commit, error) {
+func (r *Repository) Checkout(ctx context.Context, revision string, force bool) (Commit, error) {
 	if err := contextError(ctx); err != nil {
 		return Commit{}, err
 	}
-	if request.DeltaEntries == nil {
-		request.DeltaEntries = map[string]map[string]string{}
-	}
-	request.RemovedNodeIDs = orEmpty(request.RemovedNodeIDs)
-	request.RemovedEdgeIDs = orEmpty(request.RemovedEdgeIDs)
-	return r.eng.repoCommitDelta(ctx, request)
+	return r.eng.repoCheckout(ctx, revision, force)
 }
 
-// SetRef points a ref at an imported commit after native integrity validation.
-func (r *Repository) SetRef(ctx context.Context, refName, commitHash string) error {
+func (r *Repository) Commit(
+	ctx context.Context,
+	message string,
+	refName string,
+	expectedHead *string,
+	metadata any,
+) (Commit, error) {
 	if err := contextError(ctx); err != nil {
-		return err
+		return Commit{}, err
 	}
-	return r.eng.repoSetRef(ctx, refName, commitHash)
+	return r.eng.repoCommit(ctx, message, refName, expectedHead, metadata)
 }
 
-// ImportCommit loads one canonical commit object under its expected hash.
-func (r *Repository) ImportCommit(ctx context.Context, hash string, data json.RawMessage) error {
+func (r *Repository) Diff(
+	ctx context.Context,
+	base string,
+	head string,
+	limit *int,
+) (GraphDiff, error) {
 	if err := contextError(ctx); err != nil {
-		return err
+		return GraphDiff{}, err
 	}
-	return r.eng.repoImportCommit(ctx, hash, data)
+	return r.eng.repoDiff(ctx, base, head, limit)
 }
 
-// ExportCommit returns one canonical commit object, or JSON null when absent.
-func (r *Repository) ExportCommit(ctx context.Context, hash string) (json.RawMessage, error) {
+func (r *Repository) DiffStat(ctx context.Context, base, head string) (Delta, error) {
 	if err := contextError(ctx); err != nil {
-		return nil, err
+		return Delta{}, err
 	}
-	return r.eng.repoExportCommit(ctx, hash)
+	return r.eng.repoDiffStat(ctx, base, head)
 }
 
-// ExportTreeObjects returns all Merkle objects reachable from a tree root.
-func (r *Repository) ExportTreeObjects(ctx context.Context, rootHash string) (json.RawMessage, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoExportTreeObjects(ctx, rootHash)
-}
-
-// ImportTreeObjects loads canonical Merkle objects into the repository.
-func (r *Repository) ImportTreeObjects(ctx context.Context, objects json.RawMessage) error {
-	if err := contextError(ctx); err != nil {
-		return err
-	}
-	return r.eng.repoImportTreeObjects(ctx, objects)
-}
-
-// TreeEntries returns content hashes grouped by element type and ID.
-func (r *Repository) TreeEntries(ctx context.Context, rootHash string, types []string) (map[string]map[string]string, error) {
+func (r *Repository) Log(
+	ctx context.Context,
+	revision string,
+	limit int,
+) ([]map[string]any, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	if len(types) == 0 {
-		stats, err := r.eng.repoTreeRootStats(ctx, rootHash)
-		if err != nil {
-			return nil, err
-		}
-		for nodeType := range stats {
-			types = append(types, nodeType)
-		}
-	}
-	return r.eng.repoTreeEntries(ctx, rootHash, types)
+	return r.eng.repoLog(ctx, revision, limit)
 }
 
-// FindTreeEntry returns one element content hash, or nil when absent.
-func (r *Repository) FindTreeEntry(ctx context.Context, rootHash, elementID string) (*string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoFindTreeEntry(ctx, rootHash, elementID)
+// History is a structured, replayable result for one entity at a revision.
+type History struct {
+	EntityID string
+	Revision string
+	Limit    *int
+	Entries  []map[string]any
 }
 
-// DiffTreeEntries returns raw base/head content hashes for changed elements.
-func (r *Repository) DiffTreeEntries(ctx context.Context, baseRoot, headRoot string) (TreeEntryDiff, error) {
+func (r *Repository) History(
+	ctx context.Context,
+	entityID string,
+	revision string,
+	limit *int,
+) (History, error) {
 	if err := contextError(ctx); err != nil {
-		return nil, err
+		return History{}, err
 	}
-	return r.eng.repoDiffTreeEntries(ctx, baseRoot, headRoot)
+	entries, err := r.eng.repoHistory(ctx, entityID, revision, limit)
+	return History{
+		EntityID: entityID,
+		Revision: revision,
+		Limit:    limit,
+		Entries:  entries,
+	}, err
 }
 
-// TreeRootStats returns element counts by type for a loaded tree root.
-func (r *Repository) TreeRootStats(ctx context.Context, rootHash string) (map[string]int64, error) {
+func (r *Repository) Branch(ctx context.Context, name, startPoint string) (string, error) {
 	if err := contextError(ctx); err != nil {
-		return nil, err
+		return "", err
 	}
-	return r.eng.repoTreeRootStats(ctx, rootHash)
+	return r.eng.repoBranch(ctx, name, startPoint)
+}
+
+func (r *Repository) Merge(
+	ctx context.Context,
+	source string,
+	target string,
+	expectedHead *string,
+	message *string,
+) (Commit, error) {
+	if err := contextError(ctx); err != nil {
+		return Commit{}, err
+	}
+	return r.eng.repoMerge(ctx, source, target, expectedHead, message)
+}
+
+func (r *Repository) Stat(
+	ctx context.Context,
+	revision string,
+	excludeMask uint64,
+	includeMask uint64,
+) (GraphStats, error) {
+	if err := contextError(ctx); err != nil {
+		return GraphStats{}, err
+	}
+	return r.eng.repoStat(ctx, revision, excludeMask, includeMask)
+}
+
+func (r *Repository) Delta(
+	ctx context.Context,
+	revision string,
+	startTimestamp *int64,
+	endTimestamp *int64,
+) (Delta, error) {
+	if err := contextError(ctx); err != nil {
+		return Delta{}, err
+	}
+	return r.eng.repoDelta(ctx, revision, startTimestamp, endTimestamp)
 }

@@ -56,20 +56,3 @@ func TestRawLinkAndTypedSubgraph(t *testing.T) {
 		t.Fatalf("derived node count=%d err=%v", count, err)
 	}
 }
-
-func TestRepositoryIndexGraphKeepsObjectsRaw(t *testing.T) {
-	rt := openRuntime(t)
-	addDomain(t, rt, "example.com")
-	index, err := rt.Repo.IndexGraph(testContext)
-	if err != nil {
-		t.Fatal(err)
-	}
-	hash := index.Entries["domain"]["domain:example.com"]
-	if hash == "" {
-		t.Fatalf("missing domain entry: %#v", index.Entries)
-	}
-	object := index.Objects[hash]
-	if len(object) == 0 || !json.Valid(object) {
-		t.Fatalf("invalid raw CAS object: %q", object)
-	}
-}

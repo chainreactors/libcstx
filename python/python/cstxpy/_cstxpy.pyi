@@ -1,4 +1,4 @@
-"""Typed public surface for the low-level CSTX v0.3 Rust runtime.
+"""Typed public surface for the low-level CSTX Rust runtime.
 
 The binding deliberately exposes ordinary ``dict``, ``list``, ``bytes``,
 ``int``, keyword arguments, and iterators.  It does not introduce public node,
@@ -12,6 +12,21 @@ from __future__ import annotations
 from typing import Any, Iterator
 
 __version__: str
+
+
+def _object_id(envelope: bytes) -> bytes:
+    """Validate one internal object envelope and return its 32-byte ObjectId."""
+    ...
+
+
+def _object_kind(envelope: bytes) -> str:
+    """Validate one internal object envelope and return its closed object kind."""
+    ...
+
+
+def _verify_object(envelope: bytes) -> tuple[bytes, str]:
+    """Validate once and return the internal ObjectId and object kind."""
+    ...
 
 
 def is_path_expression(expression: str) -> bool:
@@ -29,15 +44,24 @@ class CSTXError(Exception):
     item_index: int | None
     """Index of the failing batch item when the error is item-specific."""
     field: str | None
-    """Canonical field associated with the failure when known."""
+    """CSTX field associated with the failure when known."""
     expected: str | None
     """Expected type or value description when available."""
     actual: str | None
     """Observed type or value description when available."""
 
 
-class NodeCursor(Iterator[dict[str, Any]]):
-    """Lazy node dictionaries that avoid materializing a full Python result set."""
+class GraphCursor(Iterator[dict[str, Any]]):
+    """Unified graph-result cursor with one-based ``limit + page`` pagination."""
+
+    @property
+    def kind(self) -> str:
+        """Logical row shape emitted by this cursor."""
+        ...
+
+    def page(self, limit: int = 1024, page: int = 1) -> dict[str, Any]:
+        """Materialize one page without rerunning the originating operation."""
+        ...
 
     @property
     def closed(self) -> bool:
@@ -48,28 +72,7 @@ class NodeCursor(Iterator[dict[str, Any]]):
         """Release cursor state; repeated calls are safe."""
         ...
 
-    def __enter__(self) -> NodeCursor:
-        """Use the cursor as a context manager for deterministic cleanup."""
-        ...
-
-    def __exit__(self, *args: Any) -> None:
-        """Close the cursor when its context exits."""
-        ...
-
-
-class EdgeCursor(Iterator[dict[str, Any]]):
-    """Lazy edge dictionaries that postpone Python object construction."""
-
-    @property
-    def closed(self) -> bool:
-        """Whether the cursor was explicitly closed."""
-        ...
-
-    def close(self) -> None:
-        """Release cursor state; repeated calls are safe."""
-        ...
-
-    def __enter__(self) -> EdgeCursor:
+    def __enter__(self) -> GraphCursor:
         """Use the cursor as a context manager for deterministic cleanup."""
         ...
 
@@ -81,13 +84,21 @@ class EdgeCursor(Iterator[dict[str, Any]]):
 class Schemas:
     """Schema/plugin namespace sharing state with its owning ``CSTX`` runtime."""
 
+    def import_schema(self, schema: dict[str, Any]) -> None:
+        """Atomically validate and register a portable schema contract."""
+        ...
+
+    def export_schema(self) -> dict[str, Any]:
+        """Export the complete portable schema contract."""
+        ...
+
     def register(
         self,
         node_type: str,
         schema: dict[str, Any],
         value_field: str | None = None,
     ) -> None:
-        """Register canonical validation metadata without a Python schema wrapper."""
+        """Register CSTX validation metadata without a Python schema wrapper."""
         ...
 
     def register_join_rule(self, rule: dict[str, Any]) -> None:
@@ -116,6 +127,10 @@ class Schemas:
 
     def available_plugins(self) -> list[str]:
         """List linked plugins without changing runtime state."""
+        ...
+
+    def plugin_artifacts(self, name: str) -> list[str]:
+        """List artifacts provided by one linked plugin."""
         ...
 
     def has_native_artifact(self, artifact: str) -> bool:
@@ -154,14 +169,10 @@ class CSTXGraph:
         """Atomically update selected nodes' native flag bitsets."""
         ...
 
-    def bfs(self, seed_id: str, depth: int = 0, reverse: bool = False) -> list[str]:
-        """Return IDs reachable through directed breadth-first traversal."""
-        ...
-
-    def shortest_paths(
-        self, start_id: str, end_id: str, max_depth: int = 5
-    ) -> list[list[str]]:
-        """Return shortest undirected paths between two nodes."""
+    def analyze(
+        self, algorithm: dict[str, Any], selection: str | None = None
+    ) -> bool | GraphCursor | None:
+        """Execute one typed graph algorithm."""
         ...
 
     def degree(self, node_id: str, direction: str = "both") -> int:
@@ -178,7 +189,7 @@ class CSTXGraph:
         self,
         expression: str,
         limit: int | None = None,
-        offset: int = 0,
+        page: int = 1,
         exclude_mask: int = 0,
         include_mask: int = 0,
     ) -> CSTX:
@@ -229,14 +240,18 @@ class CSTXGraph:
         """Return one node dictionary or raise ``CSTXError(NOT_FOUND)``."""
         ...
 
+    def edge(self, edge_id: str) -> dict[str, Any]:
+        """Return one relationship dictionary or raise ``CSTXError(NOT_FOUND)``."""
+        ...
+
     def find_node(self, identifier: str) -> dict[str, Any] | None:
         """Resolve a node by ID, value, or extras.name."""
         ...
 
     def patch_node_extras(
-        self, node_ids: list[str], patch: dict[str, Any]
+        self, node_ids: list[str] | None, patch: dict[str, Any]
     ) -> int:
-        """Merge contextual fields into selected node extras."""
+        """Merge contextual fields into selected node extras; None selects all."""
         ...
 
     def create_relationship(
@@ -255,14 +270,14 @@ class CSTXGraph:
         """Return the native union with another graph."""
         ...
 
+    def merge(self, other: CSTXGraph) -> int:
+        """Atomically merge another graph into this graph."""
+        ...
+
     def difference(
         self, other: CSTXGraph, node_type: str | None = None
     ) -> CSTX:
         """Return nodes present only in this graph."""
-        ...
-
-    def is_path_expression(self, expression: str) -> bool:
-        """Classify an expression using the native query parser."""
         ...
 
     def node_types(self) -> list[str]:
@@ -282,9 +297,12 @@ class CSTXGraph:
         ...
 
     def stats(
-        self, exclude_mask: int = 0, include_mask: int = 0
+        self,
+        exclude_mask: int = 0,
+        include_mask: int = 0,
+        selection: str | None = None,
     ) -> dict[str, dict[str, int]]:
-        """Return aggregate counts, optionally filtered by CSTX flags."""
+        """Return aggregate counts for an optional query selection and flag masks."""
         ...
 
     def nodes(
@@ -292,18 +310,18 @@ class CSTXGraph:
         types: list[str] | None = None,
         ids: list[str] | None = None,
         sources: list[str] | None = None,
+        name_contains: str | None = None,
         flags_all: int = 0,
         flags_any: int = 0,
         flags_none: int = 0,
         limit: int | None = None,
-        page_size: int = 1024,
+        page: int = 1,
         order: str = "unspecified",
-    ) -> NodeCursor:
-        """Create the normal lazy native-dictionary read path.
+    ) -> GraphCursor:
+        """Create a unified cursor over matching node dictionaries.
 
-        Keyword filters avoid public filter/options wrapper objects. ``page_size``
-        bounds incremental materialization and ``order`` accepts ``unspecified``,
-        ``id_asc``, or ``id_desc``.
+        Keyword filters avoid public filter/options wrapper objects. ``order``
+        accepts ``unspecified``, ``id_asc``, or ``id_desc``.
         """
         ...
 
@@ -314,7 +332,7 @@ class CSTXGraph:
         exclude_mask: int = 0,
         include_mask: int = 0,
         limit: int = 500,
-        offset: int = 0,
+        page: int = 1,
     ) -> dict[str, Any]:
         """Return one bounded node page with exact totals and type counts."""
         ...
@@ -326,10 +344,10 @@ class CSTXGraph:
         relations: list[str] | None = None,
         sources: list[str] | None = None,
         limit: int | None = None,
-        page_size: int = 1024,
+        page: int = 1,
         order: str = "unspecified",
-    ) -> EdgeCursor:
-        """Create a lazy native-dictionary relationship cursor using keywords."""
+    ) -> GraphCursor:
+        """Create a unified cursor over matching relationship dictionaries."""
         ...
 
     def neighbors(
@@ -337,192 +355,222 @@ class CSTXGraph:
         node_id: str,
         direction: str = "out",
         limit: int | None = None,
-        page_size: int = 1024,
+        page: int = 1,
         order: str = "unspecified",
-    ) -> NodeCursor:
-        """Lazily traverse neighboring nodes without an eager Python result list."""
+    ) -> GraphCursor:
+        """Return a unified cursor over neighboring nodes."""
         ...
 
     def query(
         self,
         expression: str,
         limit: int | None = None,
-        offset: int = 0,
+        page: int = 1,
+        types: list[str] | None = None,
+        ids: list[str] | None = None,
+        name_contains: str | None = None,
         exclude_mask: int = 0,
         include_mask: int = 0,
-        page_size: int = 1024,
         order: str = "unspecified",
-    ) -> NodeCursor:
-        """Execute the graph DSL and return the normal lazy dictionary path."""
+    ) -> GraphCursor:
+        """Execute the graph DSL once and return a unified result cursor."""
         ...
 
 
 class Repository:
-    """Snapshot/version namespace separated from graph mutation concerns."""
+    """Git-like repository over one shared working tree."""
 
-    def index_graph(self) -> dict[str, Any]:
-        """Derive canonical content hashes and CAS payloads from the current graph."""
+    def _release_transient_objects(self) -> None:
+        """Drop immutable objects retained only for the completed operation."""
+        ...
+
+    def _contains(self, object: bytes) -> bool:
+        """Return whether this native session already holds one object."""
+        ...
+
+    def _prepare(
+        self,
+        message: str,
+        ref_name: str,
+        expected_head: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        timestamp: int | None = None,
+    ) -> tuple[dict[str, Any], bytes, list[tuple[bytes, str, bytes]]]:
+        """Prepare one complete commit payload for external publication."""
+        ...
+
+    def _accept(self, commit: bytes) -> None:
+        """Accept a prepared commit after external persistence succeeds."""
+        ...
+
+    def _discard(self) -> None:
+        """Discard the currently prepared repository transaction."""
+        ...
+
+    def _prepare_merge(
+        self,
+        source: str,
+        target: str = "main",
+        expected_head: str | None = None,
+        message: str | None = None,
+        metadata: dict[str, Any] | None = None,
+        timestamp: int | None = None,
+    ) -> tuple[dict[str, Any], bytes, list[tuple[bytes, str, bytes]]]:
+        """Prepare one complete merge payload for external publication."""
+        ...
+
+    def _synchronize(
+        self,
+        objects: list[tuple[bytes, bytes]],
+        refs: list[tuple[str, bytes | None]],
+        indexes: list[tuple[bytes, bytes]],
+    ) -> None:
+        """Synchronize externally persisted objects, refs, and indexes."""
+        ...
+
+    def _missing_tree(self, commit: bytes) -> list[bytes]:
+        """Return graph-tree objects missing from the native object set."""
+        ...
+
+    def _missing_stat(self, commit: bytes) -> list[bytes]:
+        """Return the graph root needed for persisted statistics."""
+        ...
+
+    def _missing_merge(
+        self,
+        source: bytes,
+        target: bytes | None = None,
+    ) -> list[bytes]:
+        """Return the commit frontier or graph objects needed by merge."""
+        ...
+
+    def _missing_diff_stat(self, base: bytes, head: bytes) -> list[bytes]:
+        """Return index objects needed for an exact count-only diff."""
+        ...
+
+    def _missing_delta(
+        self,
+        commit: bytes,
+        start_timestamp: int | None = None,
+        end_timestamp: int | None = None,
+    ) -> list[bytes]:
+        """Return index nodes needed for a time-bounded delta."""
+        ...
+
+    def _missing_prepare(self, commit: bytes) -> list[bytes]:
+        """Return index nodes needed to prepare the working journal."""
+        ...
+
+    def _missing_history(self, commit: bytes, entity: str) -> list[bytes]:
+        """Return index nodes needed for one entity history."""
+        ...
+
+    def _missing_commits(self, commit: bytes, limit: int) -> list[bytes]:
+        """Return index nodes needed for a bounded commit log."""
+        ...
+
+    def _missing_diff(
+        self,
+        base: bytes,
+        head: bytes,
+        limit: int | None = None,
+    ) -> list[bytes]:
+        """Return index or graph objects needed for a revision diff."""
+        ...
+
+    def _commits(self, commit: bytes, limit: int) -> list[bytes]:
+        """Return bounded first-parent commit objects for synchronization."""
+        ...
+
+    def resolve(self, revision: str) -> str:
+        """Resolve a branch or object ID to a commit ID."""
+        ...
+
+    def head(self, ref_name: str = "main") -> str | None:
+        """Return the commit currently referenced by a branch."""
+        ...
+
+    def checkout(
+        self,
+        revision: str = "main",
+        force: bool = False,
+    ) -> dict[str, Any]:
+        """Replace the working tree with one committed graph."""
         ...
 
     def commit(
         self,
         message: str,
         ref_name: str = "main",
+        expected_head: str | None = None,
         metadata: Any | None = None,
+        timestamp: int | None = None,
     ) -> dict[str, Any]:
-        """Commit current graph content to a named in-memory repository ref."""
+        """Commit the working tree and atomically advance one branch."""
         ...
 
-    def diff(self, base_ref: str, head_ref: str) -> dict[str, Any]:
-        """Return added, removed, and modified IDs between two refs."""
-        ...
-
-    def dump(self, compression: str = "zstd1") -> bytes:
-        """Return a compact snapshot byte container for storage or transfer."""
-        ...
-
-    def load(self, data: bytes, compression: str = "zstd1") -> int:
-        """Replace graph state from a compact snapshot and return bytes consumed."""
-        ...
-
-    def dump_json(self) -> bytes:
-        """Return canonical JSON snapshot bytes for interoperability/debugging."""
-        ...
-
-    def load_json(self, data: bytes) -> int:
-        """Load existing canonical JSON bytes without Python object transcoding."""
-        ...
-
-    def snapshot_fingerprint(self) -> str:
-        """Return a stable hash of canonical snapshot content."""
-        ...
-
-    def head(self, ref_name: str = "main") -> str | None:
-        """Return one named repository ref without exposing Merkle internals."""
-        ...
-
-    def refs(self) -> list[tuple[str, str]]:
-        """List repository refs without exposing raw Merkle primitives."""
-        ...
-
-    def validate_ref(self, ref_name: str) -> None:
-        """Validate a ref and its complete loaded object graph."""
-        ...
-
-    def set_ref(self, ref_name: str, commit_hash: str) -> None:
-        """Set a ref to a loaded commit after native integrity validation."""
-        ...
-
-    def delete_ref(self, ref_name: str) -> None:
-        """Delete a named repository ref."""
-        ...
-
-    def fork(self, source: str, target: str) -> str:
-        """Fork one loaded ref to another name."""
-        ...
-
-    def checkout_entries(
+    def diff(
         self,
-        ref_name: str,
-        types: list[str] | None = None,
-    ) -> dict[str, dict[str, str]]:
-        """Return pre-hashed entries for a ref and optional element types."""
-        ...
-
-    def commit_entries(
-        self,
-        entries: dict[str, dict[str, str]],
-        ref_name: str,
-        message: str,
-        metadata: dict[str, Any],
-        created_at: int,
+        base: str,
+        head: str,
+        limit: int | None = None,
     ) -> dict[str, Any]:
-        """Commit pre-hashed entries for an external CAS storage adapter."""
+        """Compare two revisions with an optional result limit."""
         ...
 
-    def commit_delta(
+    def diff_stat(self, base: str, head: str) -> dict[str, Any]:
+        """Count an exact diff without materializing entity IDs."""
+        ...
+
+    def log(
         self,
-        delta_entries: dict[str, dict[str, str]],
-        removed_node_ids: list[str],
-        removed_edge_ids: list[str],
-        ref_name: str,
-        message: str,
-        metadata: dict[str, Any],
-        created_at: int,
+        revision: str = "main",
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Return first-parent commits newest first."""
+        ...
+
+    def history(
+        self,
+        entity_id: str,
+        revision: str = "main",
+        limit: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return indexed changes for one node or relationship."""
+        ...
+
+    def branch(self, name: str, start_point: str = "main") -> str:
+        """Create a branch at one revision."""
+        ...
+
+    def merge(
+        self,
+        source: str,
+        target: str = "main",
+        expected_head: str | None = None,
+        message: str | None = None,
+        metadata: Any | None = None,
+        timestamp: int | None = None,
     ) -> dict[str, Any]:
-        """Commit a pre-hashed delta for an external CAS storage adapter."""
+        """Merge one branch or commit into a target branch."""
         ...
 
-    def merge(self, source: str, target: str, created_at: int) -> dict[str, Any]:
-        """Merge one loaded ref into another."""
-        ...
-
-    def merge_base(self, ref_a: str, ref_b: str) -> str | None:
-        """Return the nearest common ancestor of two loaded refs."""
-        ...
-
-    def log(self, ref_name: str, limit: int = 50) -> list[dict[str, Any]]:
-        """Return commit history for a loaded ref, newest first."""
-        ...
-
-    def tree_stats(self, ref_name: str) -> dict[str, int]:
-        """Return element counts by type for a loaded ref."""
-        ...
-
-    def cherry_pick(
+    def stat(
         self,
-        source_ref: str,
-        target_ref: str,
-        commit_hashes: list[str],
-        created_at: int,
+        revision: str = "main",
+        exclude_mask: int = 0,
+        include_mask: int = 0,
+    ) -> dict[str, dict[str, int]]:
+        """Return persisted graph aggregates without loading graph state."""
+        ...
+
+    def delta(
+        self,
+        revision: str = "main",
+        start_timestamp: int | None = None,
+        end_timestamp: int | None = None,
     ) -> dict[str, Any]:
-        """Apply selected loaded commits to a target ref."""
-        ...
-
-    def import_commit(self, hash: str, data: dict[str, Any]) -> None:
-        """Import one canonical commit object into native repository state."""
-        ...
-
-    def export_commit(self, hash: str) -> dict[str, Any] | None:
-        """Export one canonical commit object from native repository state."""
-        ...
-
-    def export_tree_objects(
-        self,
-        root_hash: str,
-    ) -> dict[str, dict[str, dict[str, str]]]:
-        """Export all canonical Merkle objects reachable from a tree root."""
-        ...
-
-    def import_tree_objects(
-        self,
-        objects: dict[str, dict[str, dict[str, str]]],
-    ) -> None:
-        """Import canonical Merkle objects fetched by a storage adapter."""
-        ...
-
-    def tree_entries(
-        self,
-        root_hash: str,
-        types: list[str] | None = None,
-    ) -> dict[str, dict[str, str]]:
-        """Return content-hash entries for a loaded tree root."""
-        ...
-
-    def find_tree_entry(self, root_hash: str, element_id: str) -> str | None:
-        """Find one element's content hash in a loaded tree root."""
-        ...
-
-    def diff_tree_entries(
-        self,
-        base_root: str,
-        head_root: str,
-    ) -> dict[str, dict[str, tuple[str | None, str | None]]]:
-        """Return the raw content-hash diff between two loaded tree roots."""
-        ...
-
-    def tree_root_stats(self, root_hash: str) -> dict[str, int]:
-        """Return element counts by type for a loaded tree root."""
+        """Return a time-bounded commit-index delta without loading graph state."""
         ...
 
 
@@ -567,7 +615,7 @@ class RagIndexSession:
 
     def pending(
         self,
-        model_revision: str,
+        _model_revision: str,
         page_size: int = 512,
     ) -> RagRecordCursor:
         """Stream projected records through a bounded native cursor."""
@@ -575,7 +623,7 @@ class RagIndexSession:
 
     def pending_json(
         self,
-        model_revision: str,
+        _model_revision: str,
         batch_size: int = 512,
     ) -> bytes:
         """Return one projected-record batch as JSON bytes."""
@@ -633,23 +681,6 @@ class RagRetrieval:
 
     def complete_json(self, batches: bytes) -> bytes:
         """Fuse JSON batches and return the result as JSON bytes."""
-        ...
-
-
-class Bm25Recall:
-    """In-memory BM25 recall extension and default lexical implementation."""
-
-    @property
-    def id(self) -> str:
-        """Return the stable extension identifier."""
-        ...
-
-    def apply(self, delta: dict[str, Any]) -> dict[str, Any]:
-        """Atomically apply one graph projection delta."""
-        ...
-
-    def recall(self, request: dict[str, Any]) -> dict[str, Any]:
-        """Return ranked record candidates for one recall request."""
         ...
 
 

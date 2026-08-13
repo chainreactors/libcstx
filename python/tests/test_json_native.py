@@ -49,12 +49,6 @@ def test_json_edges_query_neighbors_and_snapshot():
         value.graph.neighbors("ip:1.1.1.1")
     )
     assert json.loads(value.graph._query_json("ip")) == list(value.graph.query("ip"))
-    snapshot = value.repo.dump_json()
-    restored = db()
-    restored.repo.load_json(snapshot)
-    assert json.loads(restored.graph._nodes_json()) == json.loads(
-        value.graph._nodes_json()
-    )
 
 
 def test_invalid_batch_is_atomic():

@@ -1,6 +1,12 @@
 /* @ts-self-types="./cstx_wasm.d.ts" */
 
 export class CSTX {
+    static __wrap(ptr) {
+        const obj = Object.create(CSTX.prototype);
+        obj.__wbg_ptr = ptr;
+        CSTXFinalization.register(obj, obj.__wbg_ptr, obj);
+        return obj;
+    }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
@@ -64,54 +70,6 @@ export class CSTX {
     }
 }
 if (Symbol.dispose) CSTX.prototype[Symbol.dispose] = CSTX.prototype.free;
-
-export class EdgeCursor {
-    static __wrap(ptr) {
-        const obj = Object.create(EdgeCursor.prototype);
-        obj.__wbg_ptr = ptr;
-        EdgeCursorFinalization.register(obj, obj.__wbg_ptr, obj);
-        return obj;
-    }
-    __destroy_into_raw() {
-        const ptr = this.__wbg_ptr;
-        this.__wbg_ptr = 0;
-        EdgeCursorFinalization.unregister(this);
-        return ptr;
-    }
-    free() {
-        const ptr = this.__destroy_into_raw();
-        wasm.__wbg_edgecursor_free(ptr, 0);
-    }
-    close() {
-        wasm.edgecursor_close(this.__wbg_ptr);
-    }
-    /**
-     * @returns {boolean}
-     */
-    get closed() {
-        const ret = wasm.edgecursor_closed(this.__wbg_ptr);
-        return ret !== 0;
-    }
-    /**
-     * @returns {any}
-     */
-    next() {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.edgecursor_next(retptr, this.__wbg_ptr);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return takeObject(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-}
-if (Symbol.dispose) EdgeCursor.prototype[Symbol.dispose] = EdgeCursor.prototype.free;
 
 export class Graph {
     static __wrap(ptr) {
@@ -249,6 +207,29 @@ export class Graph {
         }
     }
     /**
+     * Execute the single typed graph algorithm atom.
+     * @param {any} algorithm
+     * @param {string | null} [selection]
+     * @returns {any}
+     */
+    analyze(algorithm, selection) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(selection) ? 0 : passStringToWasm0(selection, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_analyze(retptr, this.__wbg_ptr, addHeapObject(algorithm), ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {string} node_id
      * @returns {boolean}
      */
@@ -265,6 +246,108 @@ export class Graph {
                 throw takeObject(r1);
             }
             return r0 !== 0;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} source_id
+     * @param {string} target_id
+     * @param {string} relation
+     * @param {string[] | null} [sources]
+     * @param {any | null} [attrs]
+     * @param {string | null} [identity_key]
+     * @returns {any}
+     */
+    createRelationship(source_id, target_id, relation, sources, attrs, identity_key) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(target_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(relation, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            var ptr3 = isLikeNone(sources) ? 0 : passArrayJsValueToWasm0(sources, wasm.__wbindgen_export);
+            var len3 = WASM_VECTOR_LEN;
+            var ptr4 = isLikeNone(identity_key) ? 0 : passStringToWasm0(identity_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len4 = WASM_VECTOR_LEN;
+            wasm.graph_createRelationship(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, isLikeNone(attrs) ? 0 : addHeapObject(attrs), ptr4, len4);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} node_id
+     * @param {string | null} [direction]
+     * @returns {bigint}
+     */
+    degree(node_id, direction) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(node_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(direction) ? 0 : passStringToWasm0(direction, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.graph_degree(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            return BigInt.asUintN(64, r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {Graph} other
+     * @param {string | null} [node_type]
+     * @returns {CSTX}
+     */
+    difference(other, node_type) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(other, Graph);
+            var ptr0 = isLikeNone(node_type) ? 0 : passStringToWasm0(node_type, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_difference(retptr, this.__wbg_ptr, other.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} edge_id
+     * @returns {any}
+     */
+    edge(edge_id) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(edge_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_edge(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -289,7 +372,7 @@ export class Graph {
     }
     /**
      * @param {any | null} [options]
-     * @returns {EdgeCursor}
+     * @returns {GraphCursor}
      */
     edges(options) {
         try {
@@ -301,7 +384,117 @@ export class Graph {
             if (r2) {
                 throw takeObject(r1);
             }
-            return EdgeCursor.__wrap(r0);
+            return GraphCursor.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} concept_name
+     * @returns {CSTX}
+     */
+    elevate(concept_name) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(concept_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_elevate(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {bigint | null} [exclude_mask]
+     * @param {bigint | null} [include_mask]
+     * @param {string[] | null} [excluded_ids]
+     * @returns {CSTX}
+     */
+    filter(exclude_mask, include_mask, excluded_ids) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(excluded_ids) ? 0 : passArrayJsValueToWasm0(excluded_ids, wasm.__wbindgen_export);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_filter(retptr, this.__wbg_ptr, !isLikeNone(exclude_mask), isLikeNone(exclude_mask) ? BigInt(0) : exclude_mask, !isLikeNone(include_mask), isLikeNone(include_mask) ? BigInt(0) : include_mask, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} concept_name
+     * @returns {any}
+     */
+    findAnchors(concept_name) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(concept_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_findAnchors(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} identifier
+     * @returns {any}
+     */
+    findNode(identifier) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(identifier, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_findNode(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string[]} node_ids
+     * @param {string[] | null} [edge_ids]
+     * @returns {CSTX}
+     */
+    inducedSubgraph(node_ids, edge_ids) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayJsValueToWasm0(node_ids, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(edge_ids) ? 0 : passArrayJsValueToWasm0(edge_ids, wasm.__wbindgen_export);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.graph_inducedSubgraph(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -331,10 +524,81 @@ export class Graph {
         }
     }
     /**
+     * @param {string} plugin
+     * @param {string} artifact
+     * @param {Uint8Array} data
+     * @returns {any}
+     */
+    ingestNative(plugin, artifact, data) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(plugin, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(artifact, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passArray8ToWasm0(data, wasm.__wbindgen_export);
+            const len2 = WASM_VECTOR_LEN;
+            wasm.graph_ingestNative(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string[]} node_ids
+     * @param {string} data_source
+     * @returns {any}
+     */
+    link(node_ids, data_source) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayJsValueToWasm0(node_ids, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(data_source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            wasm.graph_link(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {Graph} other
+     * @returns {bigint}
+     */
+    merge(other) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(other, Graph);
+            wasm.graph_merge(retptr, this.__wbg_ptr, other.__wbg_ptr);
+            var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            return BigInt.asUintN(64, r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {string} node_id
      * @param {string | null} [direction]
      * @param {any | null} [options]
-     * @returns {NodeCursor}
+     * @returns {GraphCursor}
      */
     neighbors(node_id, direction, options) {
         try {
@@ -350,7 +614,7 @@ export class Graph {
             if (r2) {
                 throw takeObject(r1);
             }
-            return NodeCursor.__wrap(r0);
+            return GraphCursor.__wrap(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -395,8 +659,26 @@ export class Graph {
         }
     }
     /**
+     * @returns {any}
+     */
+    nodeTypes() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.graph_nodeTypes(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {any | null} [options]
-     * @returns {NodeCursor}
+     * @returns {GraphCursor}
      */
     nodes(options) {
         try {
@@ -408,7 +690,57 @@ export class Graph {
             if (r2) {
                 throw takeObject(r1);
             }
-            return NodeCursor.__wrap(r0);
+            return GraphCursor.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string | null} [node_type]
+     * @param {string | null} [name_pattern]
+     * @param {bigint | null} [exclude_mask]
+     * @param {bigint | null} [include_mask]
+     * @param {number | null} [limit]
+     * @param {number | null} [page]
+     * @returns {any}
+     */
+    nodesPage(node_type, name_pattern, exclude_mask, include_mask, limit, page) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(node_type) ? 0 : passStringToWasm0(node_type, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(name_pattern) ? 0 : passStringToWasm0(name_pattern, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.graph_nodesPage(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, !isLikeNone(exclude_mask), isLikeNone(exclude_mask) ? BigInt(0) : exclude_mask, !isLikeNone(include_mask), isLikeNone(include_mask) ? BigInt(0) : include_mask, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0, isLikeNone(page) ? Number.MAX_SAFE_INTEGER : (page) >>> 0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string[] | null | undefined} node_ids
+     * @param {any} patch
+     * @returns {bigint}
+     */
+    patchNodeExtras(node_ids, patch) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(node_ids) ? 0 : passArrayJsValueToWasm0(node_ids, wasm.__wbindgen_export);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_patchNodeExtras(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(patch));
+            var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            return BigInt.asUintN(64, r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -416,7 +748,7 @@ export class Graph {
     /**
      * @param {string} expression
      * @param {any | null} [options]
-     * @returns {NodeCursor}
+     * @returns {GraphCursor}
      */
     query(expression, options) {
         try {
@@ -430,18 +762,48 @@ export class Graph {
             if (r2) {
                 throw takeObject(r1);
             }
-            return NodeCursor.__wrap(r0);
+            return GraphCursor.__wrap(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
     }
     /**
-     * @returns {any}
+     * @param {string} expression
+     * @param {number | null} [limit]
+     * @param {number | null} [page]
+     * @param {bigint | null} [exclude_mask]
+     * @param {bigint | null} [include_mask]
+     * @returns {CSTX}
      */
-    stats() {
+    querySubgraph(expression, limit, page, exclude_mask, include_mask) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.graph_stats(retptr, this.__wbg_ptr);
+            const ptr0 = passStringToWasm0(expression, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_querySubgraph(retptr, this.__wbg_ptr, ptr0, len0, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0, isLikeNone(page) ? Number.MAX_SAFE_INTEGER : (page) >>> 0, !isLikeNone(exclude_mask), isLikeNone(exclude_mask) ? BigInt(0) : exclude_mask, !isLikeNone(include_mask), isLikeNone(include_mask) ? BigInt(0) : include_mask);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string | null} [selection]
+     * @param {bigint | null} [exclude_mask]
+     * @param {bigint | null} [include_mask]
+     * @returns {any}
+     */
+    stats(selection, exclude_mask, include_mask) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(selection) ? 0 : passStringToWasm0(selection, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_stats(retptr, this.__wbg_ptr, ptr0, len0, !isLikeNone(exclude_mask), isLikeNone(exclude_mask) ? BigInt(0) : exclude_mask, !isLikeNone(include_mask), isLikeNone(include_mask) ? BigInt(0) : include_mask);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -449,6 +811,72 @@ export class Graph {
                 throw takeObject(r1);
             }
             return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string[] | null} [seed_ids]
+     * @param {number | null} [depth]
+     * @returns {CSTX}
+     */
+    subgraph(seed_ids, depth) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(seed_ids) ? 0 : passArrayJsValueToWasm0(seed_ids, wasm.__wbindgen_export);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.graph_subgraph(retptr, this.__wbg_ptr, ptr0, len0, isLikeNone(depth) ? Number.MAX_SAFE_INTEGER : (depth) >>> 0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {Graph} other
+     * @returns {CSTX}
+     */
+    union(other) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            _assertClass(other, Graph);
+            wasm.graph_union(retptr, this.__wbg_ptr, other.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return CSTX.__wrap(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string[]} node_ids
+     * @param {bigint | null} [add]
+     * @param {bigint | null} [remove]
+     * @param {bigint | null} [set_to]
+     * @returns {bigint}
+     */
+    updateNodeFlags(node_ids, add, remove, set_to) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passArrayJsValueToWasm0(node_ids, wasm.__wbindgen_export);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.graph_updateNodeFlags(retptr, this.__wbg_ptr, ptr0, len0, !isLikeNone(add), isLikeNone(add) ? BigInt(0) : add, !isLikeNone(remove), isLikeNone(remove) ? BigInt(0) : remove, !isLikeNone(set_to), isLikeNone(set_to) ? BigInt(0) : set_to);
+            var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            if (r3) {
+                throw takeObject(r2);
+            }
+            return BigInt.asUintN(64, r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -456,32 +884,52 @@ export class Graph {
 }
 if (Symbol.dispose) Graph.prototype[Symbol.dispose] = Graph.prototype.free;
 
-export class NodeCursor {
+export class GraphCursor {
     static __wrap(ptr) {
-        const obj = Object.create(NodeCursor.prototype);
+        const obj = Object.create(GraphCursor.prototype);
         obj.__wbg_ptr = ptr;
-        NodeCursorFinalization.register(obj, obj.__wbg_ptr, obj);
+        GraphCursorFinalization.register(obj, obj.__wbg_ptr, obj);
         return obj;
     }
     __destroy_into_raw() {
         const ptr = this.__wbg_ptr;
         this.__wbg_ptr = 0;
-        NodeCursorFinalization.unregister(this);
+        GraphCursorFinalization.unregister(this);
         return ptr;
     }
     free() {
         const ptr = this.__destroy_into_raw();
-        wasm.__wbg_nodecursor_free(ptr, 0);
+        wasm.__wbg_graphcursor_free(ptr, 0);
     }
     close() {
-        wasm.nodecursor_close(this.__wbg_ptr);
+        wasm.graphcursor_close(this.__wbg_ptr);
     }
     /**
      * @returns {boolean}
      */
     get closed() {
-        const ret = wasm.nodecursor_closed(this.__wbg_ptr);
+        const ret = wasm.graphcursor_closed(this.__wbg_ptr);
         return ret !== 0;
+    }
+    /**
+     * Return the logical row shape emitted by this cursor.
+     * @returns {string}
+     */
+    get kind() {
+        let deferred1_0;
+        let deferred1_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.graphcursor_kind(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            deferred1_0 = r0;
+            deferred1_1 = r1;
+            return getStringFromWasm0(r0, r1);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred1_0, deferred1_1, 1);
+        }
     }
     /**
      * @returns {any}
@@ -489,7 +937,27 @@ export class NodeCursor {
     next() {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.nodecursor_next(retptr, this.__wbg_ptr);
+            wasm.graphcursor_next(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {number} limit
+     * @param {number} page
+     * @returns {any}
+     */
+    page(limit, page) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.graphcursor_page(retptr, this.__wbg_ptr, limit, page);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -502,7 +970,7 @@ export class NodeCursor {
         }
     }
 }
-if (Symbol.dispose) NodeCursor.prototype[Symbol.dispose] = NodeCursor.prototype.free;
+if (Symbol.dispose) GraphCursor.prototype[Symbol.dispose] = GraphCursor.prototype.free;
 
 export class Repository {
     static __wrap(ptr) {
@@ -522,19 +990,126 @@ export class Repository {
         wasm.__wbg_repository_free(ptr, 0);
     }
     /**
-     * @param {string | null | undefined} ref_name
-     * @param {string} message
-     * @param {any | null} [metadata]
-     * @returns {any}
+     * @param {string} name
+     * @param {string | null} [start_point]
+     * @returns {string}
      */
-    commit(ref_name, message, metadata) {
+    branch(name, start_point) {
+        let deferred4_0;
+        let deferred4_1;
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            var ptr0 = isLikeNone(ref_name) ? 0 : passStringToWasm0(ref_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(start_point) ? 0 : passStringToWasm0(start_point, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.repository_branch(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
+            var ptr3 = r0;
+            var len3 = r1;
+            if (r3) {
+                ptr3 = 0; len3 = 0;
+                throw takeObject(r2);
+            }
+            deferred4_0 = ptr3;
+            deferred4_1 = len3;
+            return getStringFromWasm0(ptr3, len3);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+            wasm.__wbindgen_export4(deferred4_0, deferred4_1, 1);
+        }
+    }
+    /**
+     * @param {string | null} [revision]
+     * @param {boolean | null} [force]
+     * @returns {any}
+     */
+    checkout(revision, force) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(revision) ? 0 : passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             var len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(message, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            wasm.repository_checkout(retptr, this.__wbg_ptr, ptr0, len0, isLikeNone(force) ? 0xFFFFFF : force ? 1 : 0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} message
+     * @param {string | null} [ref_name]
+     * @param {string | null} [expected_head]
+     * @param {any | null} [metadata]
+     * @param {bigint | null} [timestamp]
+     * @returns {any}
+     */
+    commit(message, ref_name, expected_head, metadata, timestamp) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(message, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(ref_name) ? 0 : passStringToWasm0(ref_name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            var ptr2 = isLikeNone(expected_head) ? 0 : passStringToWasm0(expected_head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len2 = WASM_VECTOR_LEN;
+            wasm.repository_commit(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, isLikeNone(metadata) ? 0 : addHeapObject(metadata), !isLikeNone(timestamp), isLikeNone(timestamp) ? BigInt(0) : timestamp);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string | null} [revision]
+     * @param {bigint | null} [start_timestamp]
+     * @param {bigint | null} [end_timestamp]
+     * @returns {any}
+     */
+    delta(revision, start_timestamp, end_timestamp) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(revision) ? 0 : passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.repository_delta(retptr, this.__wbg_ptr, ptr0, len0, !isLikeNone(start_timestamp), isLikeNone(start_timestamp) ? BigInt(0) : start_timestamp, !isLikeNone(end_timestamp), isLikeNone(end_timestamp) ? BigInt(0) : end_timestamp);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} base
+     * @param {string} head
+     * @param {number | null} [limit]
+     * @returns {any}
+     */
+    diff(base, head, limit) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(base, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
-            wasm.repository_commit(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(metadata) ? 0 : addHeapObject(metadata));
+            wasm.repository_diff(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -551,14 +1126,14 @@ export class Repository {
      * @param {string} head
      * @returns {any}
      */
-    diff(base, head) {
+    diffStat(base, head) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(base, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
-            wasm.repository_diff(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            wasm.repository_diffStat(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -566,30 +1141,6 @@ export class Repository {
                 throw takeObject(r1);
             }
             return takeObject(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * @param {string | null} [compression]
-     * @returns {Uint8Array}
-     */
-    dump(compression) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            var ptr0 = isLikeNone(compression) ? 0 : passStringToWasm0(compression, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            var len0 = WASM_VECTOR_LEN;
-            wasm.repository_dump(retptr, this.__wbg_ptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeObject(r2);
-            }
-            var v2 = getArrayU8FromWasm0(r0, r1).slice();
-            wasm.__wbindgen_export4(r0, r1 * 1, 1);
-            return v2;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -616,36 +1167,19 @@ export class Repository {
         }
     }
     /**
-     * @param {Uint8Array} data
-     * @param {string | null} [compression]
-     * @returns {bigint}
-     */
-    load(data, compression) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passArray8ToWasm0(data, wasm.__wbindgen_export);
-            const len0 = WASM_VECTOR_LEN;
-            var ptr1 = isLikeNone(compression) ? 0 : passStringToWasm0(compression, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            var len1 = WASM_VECTOR_LEN;
-            wasm.repository_load(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
-            var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            if (r3) {
-                throw takeObject(r2);
-            }
-            return BigInt.asUintN(64, r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
+     * @param {string} entity_id
+     * @param {string | null} [revision]
+     * @param {number | null} [limit]
      * @returns {any}
      */
-    refs() {
+    history(entity_id, revision, limit) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.repository_refs(retptr, this.__wbg_ptr);
+            const ptr0 = passStringToWasm0(entity_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(revision) ? 0 : passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            wasm.repository_history(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
@@ -658,30 +1192,108 @@ export class Repository {
         }
     }
     /**
-     * @returns {string}
+     * @param {string | null} [revision]
+     * @param {number | null} [limit]
+     * @returns {any}
      */
-    snapshotFingerprint() {
-        let deferred2_0;
-        let deferred2_1;
+    log(revision, limit) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            wasm.repository_snapshotFingerprint(retptr, this.__wbg_ptr);
+            var ptr0 = isLikeNone(revision) ? 0 : passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.repository_log(retptr, this.__wbg_ptr, ptr0, len0, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} source
+     * @param {string | null} [target]
+     * @param {string | null} [expected_head]
+     * @param {string | null} [message]
+     * @returns {any}
+     */
+    merge(source, target, expected_head, message) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            var ptr1 = isLikeNone(target) ? 0 : passStringToWasm0(target, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len1 = WASM_VECTOR_LEN;
+            var ptr2 = isLikeNone(expected_head) ? 0 : passStringToWasm0(expected_head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len2 = WASM_VECTOR_LEN;
+            var ptr3 = isLikeNone(message) ? 0 : passStringToWasm0(message, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len3 = WASM_VECTOR_LEN;
+            wasm.repository_merge(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} revision
+     * @returns {string}
+     */
+    resolve(revision) {
+        let deferred3_0;
+        let deferred3_1;
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.repository_resolve(retptr, this.__wbg_ptr, ptr0, len0);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
             var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
-            var ptr1 = r0;
-            var len1 = r1;
+            var ptr2 = r0;
+            var len2 = r1;
             if (r3) {
-                ptr1 = 0; len1 = 0;
+                ptr2 = 0; len2 = 0;
                 throw takeObject(r2);
             }
-            deferred2_0 = ptr1;
-            deferred2_1 = len1;
-            return getStringFromWasm0(ptr1, len1);
+            deferred3_0 = ptr2;
+            deferred3_1 = len2;
+            return getStringFromWasm0(ptr2, len2);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
-            wasm.__wbindgen_export4(deferred2_0, deferred2_1, 1);
+            wasm.__wbindgen_export4(deferred3_0, deferred3_1, 1);
+        }
+    }
+    /**
+     * @param {string | null} [revision]
+     * @param {bigint | null} [exclude_mask]
+     * @param {bigint | null} [include_mask]
+     * @returns {any}
+     */
+    stat(revision, exclude_mask, include_mask) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            var ptr0 = isLikeNone(revision) ? 0 : passStringToWasm0(revision, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len0 = WASM_VECTOR_LEN;
+            wasm.repository_stat(retptr, this.__wbg_ptr, ptr0, len0, !isLikeNone(exclude_mask), isLikeNone(exclude_mask) ? BigInt(0) : exclude_mask, !isLikeNone(include_mask), isLikeNone(include_mask) ? BigInt(0) : include_mask);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
         }
     }
 }
@@ -703,6 +1315,24 @@ export class Schemas {
     free() {
         const ptr = this.__destroy_into_raw();
         wasm.__wbg_schemas_free(ptr, 0);
+    }
+    /**
+     * @returns {any}
+     */
+    anchorConcepts() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.schemas_anchorConcepts(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
     }
     /**
      * @returns {any}
@@ -744,6 +1374,24 @@ export class Schemas {
         }
     }
     /**
+     * @returns {any}
+     */
+    exportSchema() {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.schemas_exportSchema(retptr, this.__wbg_ptr);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {string} node_type
      * @returns {any}
      */
@@ -760,6 +1408,43 @@ export class Schemas {
                 throw takeObject(r1);
             }
             return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} artifact
+     * @returns {boolean}
+     */
+    hasNativeArtifact(artifact) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(artifact, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.schemas_hasNativeArtifact(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return r0 !== 0;
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {any} schema
+     */
+    importSchema(schema) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.schemas_importSchema(retptr, this.__wbg_ptr, addHeapObject(schema));
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -814,6 +1499,27 @@ export class Schemas {
         }
     }
     /**
+     * @param {string} name
+     * @returns {any}
+     */
+    pluginArtifacts(name) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(name, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.schemas_pluginArtifacts(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {string} node_type
      * @param {any} schema
      * @param {string | null} [value_field]
@@ -826,6 +1532,22 @@ export class Schemas {
             var ptr1 = isLikeNone(value_field) ? 0 : passStringToWasm0(value_field, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             var len1 = WASM_VECTOR_LEN;
             wasm.schemas_register(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(schema), ptr1, len1);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            if (r1) {
+                throw takeObject(r0);
+            }
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {any} rule
+     */
+    registerJoinRule(rule) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            wasm.schemas_registerJoinRule(retptr, this.__wbg_ptr, addHeapObject(rule));
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             if (r1) {
@@ -860,11 +1582,11 @@ export function version() {
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg_Error_92b29b0548f8b746: function(arg0, arg1) {
+        __wbg_Error_408e67f47ca7b58b: function(arg0, arg1) {
             const ret = Error(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
-        __wbg_Number_9a4e0ecb0fa16705: function(arg0) {
+        __wbg_Number_3890faa6d3ff057d: function(arg0) {
             const ret = Number(getObject(arg0));
             return ret;
         },
@@ -875,68 +1597,68 @@ function __wbg_get_imports() {
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
-        __wbg___wbindgen_bigint_get_as_i64_d968e41184ae354f: function(arg0, arg1) {
+        __wbg___wbindgen_bigint_get_as_i64_c4ecf48528083721: function(arg0, arg1) {
             const v = getObject(arg1);
             const ret = typeof(v) === 'bigint' ? v : undefined;
             getDataViewMemory0().setBigInt64(arg0 + 8 * 1, isLikeNone(ret) ? BigInt(0) : ret, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
         },
-        __wbg___wbindgen_boolean_get_fa956cfa2d1bd751: function(arg0) {
+        __wbg___wbindgen_boolean_get_c9c83ebd41b34df3: function(arg0) {
             const v = getObject(arg0);
             const ret = typeof(v) === 'boolean' ? v : undefined;
             return isLikeNone(ret) ? 0xFFFFFF : ret ? 1 : 0;
         },
-        __wbg___wbindgen_debug_string_c25d447a39f5578f: function(arg0, arg1) {
+        __wbg___wbindgen_debug_string_a57024b9c6e4a48b: function(arg0, arg1) {
             const ret = debugString(getObject(arg1));
             const ptr1 = passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
-        __wbg___wbindgen_in_aca499c5de7ff5e5: function(arg0, arg1) {
+        __wbg___wbindgen_in_ac983077f137f2e6: function(arg0, arg1) {
             const ret = getObject(arg0) in getObject(arg1);
             return ret;
         },
-        __wbg___wbindgen_is_bigint_2f76dc55065b4273: function(arg0) {
+        __wbg___wbindgen_is_bigint_8ffbbef442139384: function(arg0) {
             const ret = typeof(getObject(arg0)) === 'bigint';
             return ret;
         },
-        __wbg___wbindgen_is_function_1ff95bcc5517c252: function(arg0) {
+        __wbg___wbindgen_is_function_5e4570eb24ffa122: function(arg0) {
             const ret = typeof(getObject(arg0)) === 'function';
             return ret;
         },
-        __wbg___wbindgen_is_null_ea9085d691f535d3: function(arg0) {
+        __wbg___wbindgen_is_null_7d13f41e1a2d5140: function(arg0) {
             const ret = getObject(arg0) === null;
             return ret;
         },
-        __wbg___wbindgen_is_object_a27215656b807791: function(arg0) {
+        __wbg___wbindgen_is_object_a2790eb24c211ea0: function(arg0) {
             const val = getObject(arg0);
             const ret = typeof(val) === 'object' && val !== null;
             return ret;
         },
-        __wbg___wbindgen_is_string_ea5e6cc2e4141dfe: function(arg0) {
+        __wbg___wbindgen_is_string_e6f02f0ea5f20a32: function(arg0) {
             const ret = typeof(getObject(arg0)) === 'string';
             return ret;
         },
-        __wbg___wbindgen_is_undefined_c05833b95a3cf397: function(arg0) {
+        __wbg___wbindgen_is_undefined_6cff064c44e0d823: function(arg0) {
             const ret = getObject(arg0) === undefined;
             return ret;
         },
-        __wbg___wbindgen_jsval_eq_e659fcf7b0e32763: function(arg0, arg1) {
+        __wbg___wbindgen_jsval_eq_0a18949a61670320: function(arg0, arg1) {
             const ret = getObject(arg0) === getObject(arg1);
             return ret;
         },
-        __wbg___wbindgen_jsval_loose_eq_db4c3b15f63fc170: function(arg0, arg1) {
+        __wbg___wbindgen_jsval_loose_eq_acf2776254a8d832: function(arg0, arg1) {
             const ret = getObject(arg0) == getObject(arg1);
             return ret;
         },
-        __wbg___wbindgen_number_get_394265ed1e1b84ee: function(arg0, arg1) {
+        __wbg___wbindgen_number_get_136b9679cab35cfb: function(arg0, arg1) {
             const obj = getObject(arg1);
             const ret = typeof(obj) === 'number' ? obj : undefined;
             getDataViewMemory0().setFloat64(arg0 + 8 * 1, isLikeNone(ret) ? 0 : ret, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, !isLikeNone(ret), true);
         },
-        __wbg___wbindgen_string_get_b0ca35b86a603356: function(arg0, arg1) {
+        __wbg___wbindgen_string_get_d154f1e671052120: function(arg0, arg1) {
             const obj = getObject(arg1);
             const ret = typeof(obj) === 'string' ? obj : undefined;
             var ptr1 = isLikeNone(ret) ? 0 : passStringToWasm0(ret, wasm.__wbindgen_export, wasm.__wbindgen_export2);
@@ -944,33 +1666,30 @@ function __wbg_get_imports() {
             getDataViewMemory0().setInt32(arg0 + 4 * 1, len1, true);
             getDataViewMemory0().setInt32(arg0 + 4 * 0, ptr1, true);
         },
-        __wbg___wbindgen_throw_344f42d3211c4765: function(arg0, arg1) {
+        __wbg___wbindgen_throw_bb96b2010945f0bc: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
-        __wbg_call_8a2dd23819f8a60a: function() { return handleError(function (arg0, arg1) {
+        __wbg_call_1c5886ab9c57d1c7: function() { return handleError(function (arg0, arg1) {
             const ret = getObject(arg0).call(getObject(arg1));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_done_89b2b13e91a60321: function(arg0) {
+        __wbg_done_669171204c3dcae2: function(arg0) {
             const ret = getObject(arg0).done;
             return ret;
         },
-        __wbg_entries_015dc610cd81ede0: function(arg0) {
+        __wbg_entries_7774d489e1da5f4f: function(arg0) {
             const ret = Object.entries(getObject(arg0));
             return addHeapObject(ret);
         },
-        __wbg_getRandomValues_3f44b700395062e5: function() { return handleError(function (arg0, arg1) {
-            globalThis.crypto.getRandomValues(getArrayU8FromWasm0(arg0, arg1));
-        }, arguments); },
-        __wbg_get_507a50627bffa49b: function(arg0, arg1) {
+        __wbg_get_c0c8f8d7da0c03dd: function(arg0, arg1) {
             const ret = getObject(arg0)[arg1 >>> 0];
             return addHeapObject(ret);
         },
-        __wbg_get_c7eb1f358a7654df: function() { return handleError(function (arg0, arg1) {
+        __wbg_get_d173c0308df22d37: function() { return handleError(function (arg0, arg1) {
             const ret = Reflect.get(getObject(arg0), getObject(arg1));
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_get_unchecked_6e0ad6d2a41b06f6: function(arg0, arg1) {
+        __wbg_get_unchecked_e20b893aeafc3fca: function(arg0, arg1) {
             const ret = getObject(arg0)[arg1 >>> 0];
             return addHeapObject(ret);
         },
@@ -978,7 +1697,11 @@ function __wbg_get_imports() {
             const ret = getObject(arg0)[getObject(arg1)];
             return addHeapObject(ret);
         },
-        __wbg_instanceof_ArrayBuffer_4480b9e0068a8adb: function(arg0) {
+        __wbg_graphcursor_new: function(arg0) {
+            const ret = GraphCursor.__wrap(arg0);
+            return addHeapObject(ret);
+        },
+        __wbg_instanceof_ArrayBuffer_993d02d2d254cad1: function(arg0) {
             let result;
             try {
                 result = getObject(arg0) instanceof ArrayBuffer;
@@ -988,7 +1711,7 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
-        __wbg_instanceof_Map_e5b5e3db98422fcc: function(arg0) {
+        __wbg_instanceof_Map_9a4d6ead180ae3a9: function(arg0) {
             let result;
             try {
                 result = getObject(arg0) instanceof Map;
@@ -998,7 +1721,7 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
-        __wbg_instanceof_Uint8Array_309b927aaf7a3fc7: function(arg0) {
+        __wbg_instanceof_Uint8Array_f935dbb0aa7cdeed: function(arg0) {
             let result;
             try {
                 result = getObject(arg0) instanceof Uint8Array;
@@ -1008,72 +1731,72 @@ function __wbg_get_imports() {
             const ret = result;
             return ret;
         },
-        __wbg_isArray_0677c962b281d01a: function(arg0) {
+        __wbg_isArray_6339f732981044bf: function(arg0) {
             const ret = Array.isArray(getObject(arg0));
             return ret;
         },
-        __wbg_isSafeInteger_04f36e4056f1b851: function(arg0) {
+        __wbg_isSafeInteger_f3d6cd19ccfe4512: function(arg0) {
             const ret = Number.isSafeInteger(getObject(arg0));
             return ret;
         },
-        __wbg_iterator_6f722e4a93058b71: function() {
+        __wbg_iterator_5cebbb86e33c6dd6: function() {
             const ret = Symbol.iterator;
             return addHeapObject(ret);
         },
-        __wbg_length_1f0964f4a5e2c6d8: function(arg0) {
+        __wbg_length_36bd29c6848c2144: function(arg0) {
             const ret = getObject(arg0).length;
             return ret;
         },
-        __wbg_length_370319915dc99107: function(arg0) {
+        __wbg_length_ecfa2c63d3d0d82c: function(arg0) {
             const ret = getObject(arg0).length;
             return ret;
         },
-        __wbg_new_32b398fb48b6d94a: function() {
+        __wbg_new_116be93542d39019: function() {
             const ret = new Array();
             return addHeapObject(ret);
         },
-        __wbg_new_7796ffc7ed656783: function() {
-            const ret = new Map();
-            return addHeapObject(ret);
-        },
-        __wbg_new_b667d279fd5aa943: function(arg0, arg1) {
+        __wbg_new_358857d90afd5a2d: function(arg0, arg1) {
             const ret = new Error(getStringFromWasm0(arg0, arg1));
             return addHeapObject(ret);
         },
-        __wbg_new_cd45aabdf6073e84: function(arg0) {
+        __wbg_new_77cc4f4f472aeb81: function(arg0) {
             const ret = new Uint8Array(getObject(arg0));
             return addHeapObject(ret);
         },
-        __wbg_new_da52cf8fe3429cb2: function() {
+        __wbg_new_cdf041679ded4c5f: function() {
+            const ret = new Map();
+            return addHeapObject(ret);
+        },
+        __wbg_new_ebe3e0f6837f0879: function() {
             const ret = new Object();
             return addHeapObject(ret);
         },
-        __wbg_next_6dbf2c0ac8cde20f: function(arg0) {
-            const ret = getObject(arg0).next;
-            return addHeapObject(ret);
-        },
-        __wbg_next_71f2aa1cb3d1e37e: function() { return handleError(function (arg0) {
+        __wbg_next_42cf16ee0dafc9e2: function() { return handleError(function (arg0) {
             const ret = getObject(arg0).next();
             return addHeapObject(ret);
         }, arguments); },
-        __wbg_prototypesetcall_4770620bbe4688a0: function(arg0, arg1, arg2) {
+        __wbg_next_8f26b64fa5e9f64b: function(arg0) {
+            const ret = getObject(arg0).next;
+            return addHeapObject(ret);
+        },
+        __wbg_prototypesetcall_de8e0d9553586985: function(arg0, arg1, arg2) {
             Uint8Array.prototype.set.call(getArrayU8FromWasm0(arg0, arg1), getObject(arg2));
         },
-        __wbg_set_575dd786d51585f8: function(arg0, arg1, arg2) {
+        __wbg_set_014226dfeca53178: function(arg0, arg1, arg2) {
             const ret = getObject(arg0).set(getObject(arg1), getObject(arg2));
             return addHeapObject(ret);
         },
         __wbg_set_6be42768c690e380: function(arg0, arg1, arg2) {
             getObject(arg0)[takeObject(arg1)] = takeObject(arg2);
         },
-        __wbg_set_8535240470bf2500: function() { return handleError(function (arg0, arg1, arg2) {
+        __wbg_set_8155bb79a948541b: function() { return handleError(function (arg0, arg1, arg2) {
             const ret = Reflect.set(getObject(arg0), getObject(arg1), getObject(arg2));
             return ret;
         }, arguments); },
-        __wbg_set_8a16b38e4805b298: function(arg0, arg1, arg2) {
+        __wbg_set_a80955eb93b145c6: function(arg0, arg1, arg2) {
             getObject(arg0)[arg1 >>> 0] = takeObject(arg2);
         },
-        __wbg_value_a5d5488a9589444a: function(arg0) {
+        __wbg_value_1e2369fab29b420e: function(arg0) {
             const ret = getObject(arg0).value;
             return addHeapObject(ret);
         },
@@ -1114,15 +1837,12 @@ function __wbg_get_imports() {
 const CSTXFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_cstx_free(ptr, 1));
-const EdgeCursorFinalization = (typeof FinalizationRegistry === 'undefined')
-    ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_edgecursor_free(ptr, 1));
 const GraphFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_graph_free(ptr, 1));
-const NodeCursorFinalization = (typeof FinalizationRegistry === 'undefined')
+const GraphCursorFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
-    : new FinalizationRegistry(ptr => wasm.__wbg_nodecursor_free(ptr, 1));
+    : new FinalizationRegistry(ptr => wasm.__wbg_graphcursor_free(ptr, 1));
 const RepositoryFinalization = (typeof FinalizationRegistry === 'undefined')
     ? { register: () => {}, unregister: () => {} }
     : new FinalizationRegistry(ptr => wasm.__wbg_repository_free(ptr, 1));
@@ -1137,6 +1857,12 @@ function addHeapObject(obj) {
 
     heap[idx] = obj;
     return idx;
+}
+
+function _assertClass(instance, klass) {
+    if (!(instance instanceof klass)) {
+        throw new Error(`expected instance of ${klass.name}`);
+    }
 }
 
 function debugString(val) {
@@ -1261,6 +1987,16 @@ function passArray8ToWasm0(arg, malloc) {
     return ptr;
 }
 
+function passArrayJsValueToWasm0(array, malloc) {
+    const ptr = malloc(array.length * 4, 4) >>> 0;
+    const mem = getDataViewMemory0();
+    for (let i = 0; i < array.length; i++) {
+        mem.setUint32(ptr + 4 * i, addHeapObject(array[i]), true);
+    }
+    WASM_VECTOR_LEN = array.length;
+    return ptr;
+}
+
 function passStringToWasm0(arg, malloc, realloc) {
     if (realloc === undefined) {
         const buf = cachedTextEncoder.encode(arg);
@@ -1345,11 +2081,15 @@ function __wbg_finalize_init(instance, module) {
 
 async function __wbg_load(module, imports) {
     if (typeof Response === 'function' && module instanceof Response) {
+        if (!module.ok) {
+            throw new Error(`failed to fetch Wasm: ${module.status} ${module.statusText} fetching '${module.url}'`);
+        }
+
         if (typeof WebAssembly.instantiateStreaming === 'function') {
             try {
                 return await WebAssembly.instantiateStreaming(module, imports);
             } catch (e) {
-                const validResponse = module.ok && expectedResponseType(module.type);
+                const validResponse = expectedResponseType(module.type);
 
                 if (validResponse && module.headers.get('Content-Type') !== 'application/wasm') {
                     console.warn("`WebAssembly.instantiateStreaming` failed because your server does not serve Wasm with `application/wasm` MIME type. Falling back to `WebAssembly.instantiate` which is slower. Original error:\n", e);

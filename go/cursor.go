@@ -1,99 +1,87 @@
 package cstx
 
-import "context"
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+)
 
-// NodeCursor is a lazy node iterator that avoids materializing a full result
-// set. Callers must Close it; Close is idempotent. A mutation that
-// invalidates the cursor surfaces through Err as CodeCursorInvalidated.
-type NodeCursor struct {
-	iter nodeIter
-	node Node
-	err  error
-	done bool
+// CursorKind identifies the row shape returned by a GraphCursor.
+type CursorKind string
+
+const (
+	CursorKindNodes       CursorKind = "nodes"
+	CursorKindEdges       CursorKind = "edges"
+	CursorKindComponents  CursorKind = "components"
+	CursorKindNodeScores  CursorKind = "node_scores"
+	CursorKindNodePairs   CursorKind = "node_pairs"
+	CursorKindCycles      CursorKind = "cycles"
+	CursorKindPaths       CursorKind = "paths"
+	CursorKindCommunities CursorKind = "communities"
+)
+
+// CursorPage is one bounded, one-based page from a native graph result.
+// Items stay as raw JSON until the caller chooses the domain type, avoiding a
+// second in-memory graph or eager decoding of rows outside the requested page.
+type CursorPage struct {
+	Items   []json.RawMessage `json:"items"`
+	Page    int               `json:"page"`
+	Limit   int               `json:"limit"`
+	HasNext bool              `json:"has_next"`
+	Total   *uint64           `json:"total,omitempty"`
+	Summary json.RawMessage   `json:"summary,omitempty"`
 }
 
-// Next advances the cursor. It returns false at exhaustion or on error;
-// check Err after the loop.
-func (c *NodeCursor) Next(ctx context.Context) bool {
-	if c.done {
-		return false
+// Nodes decodes this page as CSTX nodes.
+func (p CursorPage) Nodes() ([]Node, error) {
+	items := make([]Node, len(p.Items))
+	for index, item := range p.Items {
+		if err := json.Unmarshal(item, &items[index]); err != nil {
+			return nil, fmt.Errorf("cstx: decode node at page index %d: %w", index, err)
+		}
+	}
+	return items, nil
+}
+
+// Edges decodes this page as CSTX relationships.
+func (p CursorPage) Edges() ([]Edge, error) {
+	items := make([]Edge, len(p.Items))
+	for index, item := range p.Items {
+		if err := json.Unmarshal(item, &items[index]); err != nil {
+			return nil, fmt.Errorf("cstx: decode edge at page index %d: %w", index, err)
+		}
+	}
+	return items, nil
+}
+
+// GraphCursor is the single cursor type for nodes, edges, queries and graph
+// analysis results. Page uses a one-based page number and never reruns the
+// operation that created the cursor.
+type GraphCursor struct {
+	inner graphCursor
+	kind  CursorKind
+	done  bool
+}
+
+// Kind returns the logical row shape emitted by this cursor.
+func (c *GraphCursor) Kind() CursorKind { return c.kind }
+
+// Page materializes one bounded page.
+func (c *GraphCursor) Page(ctx context.Context, limit, page int) (CursorPage, error) {
+	if c.done || c.inner == nil {
+		return CursorPage{}, &Error{Code: CodeInvalidArgument, Operation: "cursor.page", Message: "cursor is closed"}
 	}
 	if err := contextError(ctx); err != nil {
-		c.err = err
-		c.done = true
-		return false
+		return CursorPage{}, err
 	}
-	node, ok, err := c.iter.next(ctx)
-	if err != nil {
-		c.err = err
-		c.done = true
-		return false
-	}
-	if !ok {
-		c.done = true
-		return false
-	}
-	c.node = node
-	return true
+	return c.inner.page(ctx, limit, page)
 }
-
-// Node returns the current node. It is valid only after Next returned true.
-func (c *NodeCursor) Node() Node { return c.node }
-
-// Err returns the first error encountered during iteration.
-func (c *NodeCursor) Err() error { return c.err }
 
 // Close releases cursor state; repeated calls are safe.
-func (c *NodeCursor) Close() error {
+func (c *GraphCursor) Close() error {
 	if !c.done {
 		c.done = true
-		c.iter.close()
-	}
-	return nil
-}
-
-// EdgeCursor is a lazy relationship iterator.
-type EdgeCursor struct {
-	iter edgeIter
-	edge Edge
-	err  error
-	done bool
-}
-
-func (c *EdgeCursor) Next(ctx context.Context) bool {
-	if c.done {
-		return false
-	}
-	if err := contextError(ctx); err != nil {
-		c.err = err
-		c.done = true
-		return false
-	}
-	edge, ok, err := c.iter.next(ctx)
-	if err != nil {
-		c.err = err
-		c.done = true
-		return false
-	}
-	if !ok {
-		c.done = true
-		return false
-	}
-	c.edge = edge
-	return true
-}
-
-// Edge returns the current relationship.
-func (c *EdgeCursor) Edge() Edge { return c.edge }
-
-// Err returns the first error encountered during iteration.
-func (c *EdgeCursor) Err() error { return c.err }
-
-// Close releases cursor state; repeated calls are safe.
-func (c *EdgeCursor) Close() error {
-	if !c.done {
-		c.done = true
-		c.iter.close()
+		c.inner.close()
 	}
 	return nil
 }

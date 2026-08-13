@@ -74,53 +74,101 @@ func (g *Graph) Stats(ctx context.Context) (GraphStats, error) {
 
 // Nodes creates a lazy cursor over nodes matching the filter. The zero
 // filter and options select everything with runtime defaults.
-func (g *Graph) Nodes(ctx context.Context, filter NodeFilter, options CollectionOptions) (*NodeCursor, error) {
+func (g *Graph) Nodes(ctx context.Context, filter NodeFilter, options CollectionOptions) (*GraphCursor, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	iter, err := g.eng.graphNodes(ctx, filter, options.normalize())
+	cursor, err := g.eng.graphNodes(ctx, filter, options.normalize())
 	if err != nil {
 		return nil, err
 	}
-	return &NodeCursor{iter: iter}, nil
+	return &GraphCursor{inner: cursor, kind: CursorKindNodes}, nil
 }
 
 // Edges creates a lazy cursor over relationships matching the filter.
-func (g *Graph) Edges(ctx context.Context, filter EdgeFilter, options CollectionOptions) (*EdgeCursor, error) {
+func (g *Graph) Edges(ctx context.Context, filter EdgeFilter, options CollectionOptions) (*GraphCursor, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	iter, err := g.eng.graphEdges(ctx, filter, options.normalize())
+	cursor, err := g.eng.graphEdges(ctx, filter, options.normalize())
 	if err != nil {
 		return nil, err
 	}
-	return &EdgeCursor{iter: iter}, nil
+	return &GraphCursor{inner: cursor, kind: CursorKindEdges}, nil
 }
 
 // Neighbors lazily traverses neighboring nodes. Direction is "out", "in",
 // or "both".
-func (g *Graph) Neighbors(ctx context.Context, nodeID, direction string, options CollectionOptions) (*NodeCursor, error) {
+func (g *Graph) Neighbors(ctx context.Context, nodeID, direction string, options CollectionOptions) (*GraphCursor, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	iter, err := g.eng.graphNeighbors(ctx, nodeID, direction, options.normalize())
+	cursor, err := g.eng.graphNeighbors(ctx, nodeID, direction, options.normalize())
 	if err != nil {
 		return nil, err
 	}
-	return &NodeCursor{iter: iter}, nil
+	return &GraphCursor{inner: cursor, kind: CursorKindNodes}, nil
 }
 
 // Query executes the graph DSL and returns a lazy cursor over terminal nodes.
-func (g *Graph) Query(ctx context.Context, expression string, options QueryOptions) (*NodeCursor, error) {
+func (g *Graph) Query(ctx context.Context, expression string, options QueryOptions) (*GraphCursor, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
 	options.Collection = options.Collection.normalize()
-	iter, err := g.eng.graphQuery(ctx, expression, options)
+	cursor, err := g.eng.graphQuery(ctx, expression, options)
 	if err != nil {
 		return nil, err
 	}
-	return &NodeCursor{iter: iter}, nil
+	return &GraphCursor{inner: cursor, kind: CursorKindNodes}, nil
+}
+
+// Analyze executes one graph algorithm. The result is nil, bool, or
+// *GraphCursor according to the selected algorithm.
+func (g *Graph) Analyze(ctx context.Context, algorithm map[string]any, selection ...string) (any, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	if len(selection) > 1 {
+		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.analyze", Message: "at most one selection expression is allowed"}
+	}
+	var selected *string
+	if len(selection) == 1 {
+		selected = &selection[0]
+	}
+	kind, boolean, cursor, err := g.eng.graphAnalyze(ctx, algorithm, selected)
+	if err != nil {
+		return nil, err
+	}
+	switch kind {
+	case 0:
+		return nil, nil
+	case 1:
+		return boolean, nil
+	case 2:
+		return &GraphCursor{inner: cursor, kind: algorithmCursorKind(algorithm)}, nil
+	default:
+		return nil, &Error{Code: CodeInternal, Operation: "graph.analyze", Message: "unknown algorithm result kind"}
+	}
+}
+
+func algorithmCursorKind(algorithm map[string]any) CursorKind {
+	switch algorithm["name"] {
+	case "weak_components", "strong_components":
+		return CursorKindComponents
+	case "cycle_basis":
+		return CursorKindCycles
+	case "bridges":
+		return CursorKindNodePairs
+	case "core_numbers", "betweenness", "closeness":
+		return CursorKindNodeScores
+	case "shortest_paths":
+		return CursorKindPaths
+	case "leiden":
+		return CursorKindCommunities
+	default:
+		return CursorKindNodes
+	}
 }
 
 // Subgraph returns an independently owned runtime containing nodes reachable
@@ -130,22 +178,6 @@ func (g *Graph) Subgraph(ctx context.Context, seedIDs []string, depth uint32) (*
 		return nil, err
 	}
 	eng, err := g.eng.graphSubgraph(ctx, seedIDs, depth)
-	if err != nil {
-		return nil, err
-	}
-	return wrapRuntime(eng, "derived"), nil
-}
-
-// Difference returns an independently owned runtime containing this graph
-// minus nodes of nodeType present in other. The caller must close it.
-func (g *Graph) Difference(ctx context.Context, other *CSTX, nodeType string) (*CSTX, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	if other == nil {
-		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.difference", Message: "other runtime is required"}
-	}
-	eng, err := g.eng.graphDifference(ctx, other.eng, nodeType)
 	if err != nil {
 		return nil, err
 	}
