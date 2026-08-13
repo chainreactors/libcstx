@@ -48,18 +48,17 @@ func (f EdgeFilter) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// CollectionOptions bounds cursor materialization and ordering.
-// The zero value uses the runtime defaults (no limit, page size 1024,
-// unspecified order).
+// CollectionOptions selects the iterator convenience window and ordering.
+// Explicit random access uses GraphCursor.Page(limit, page).
 type CollectionOptions struct {
-	Limit    *int  `json:"limit"`
-	PageSize int   `json:"page_size"`
-	Order    Order `json:"order"`
+	Limit *int  `json:"limit"`
+	Page  int   `json:"page"`
+	Order Order `json:"order"`
 }
 
 func (o CollectionOptions) normalize() CollectionOptions {
-	if o.PageSize <= 0 {
-		o.PageSize = DefaultCursorPageSize
+	if o.Page <= 0 {
+		o.Page = 1
 	}
 	if o.Order == "" {
 		o.Order = OrderUnspecified
@@ -67,12 +66,9 @@ func (o CollectionOptions) normalize() CollectionOptions {
 	return o
 }
 
-// QueryOptions applies collection, pagination, and CSTX flag semantics to
-// graph DSL queries. Its zero value preserves the unfiltered first-page
-// behavior used before offset and flag masks were added to the Rust contract.
+// QueryOptions applies unified collection paging and CSTX flag semantics.
 type QueryOptions struct {
 	Collection  CollectionOptions `json:"collection"`
-	Offset      int               `json:"offset"`
 	ExcludeMask uint64            `json:"exclude_mask"`
 	IncludeMask uint64            `json:"include_mask"`
 }

@@ -198,6 +198,13 @@ func boolResult(op string, call func(out *C.uint8_t, errBuf *C.CstxBuffer) C.Cst
 	return out != 0, nil
 }
 
+func boolByte(value bool) uint8 {
+	if value {
+		return 1
+	}
+	return 0
+}
+
 func marshal(value any) []byte {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -227,6 +234,26 @@ func (e *nativeEngine) lastChange(_ context.Context) (ChangeSet, error) {
 
 // --- schemas -------------------------------------------------------------
 
+func (e *nativeEngine) schemaImport(_ context.Context, contract SchemaContract) error {
+	payload, err := marshalInput("schemas.import_schema", contract)
+	if err != nil {
+		return err
+	}
+	return statusCall("schemas.import_schema", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_schema_import_schema(e.handle, byteSlice(payload), errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+}
+
+func (e *nativeEngine) schemaExport(_ context.Context) (SchemaContract, error) {
+	var contract SchemaContract
+	err := jsonResult("schemas.export_schema", &contract, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_schema_export_schema_json(e.handle, out, errBuf)
+	})
+	return contract, err
+}
+
 func (e *nativeEngine) schemaRegister(_ context.Context, nodeType string, schema map[string]any, valueField string) error {
 	payload, err := marshalInput("schemas.register", schema)
 	if err != nil {
@@ -237,6 +264,18 @@ func (e *nativeEngine) schemaRegister(_ context.Context, nodeType string, schema
 		runtime.KeepAlive(nodeType)
 		runtime.KeepAlive(payload)
 		runtime.KeepAlive(valueField)
+		return rc
+	})
+}
+
+func (e *nativeEngine) schemaRegisterJoinRule(_ context.Context, rule JoinRuleSpec) error {
+	payload, err := marshalInput("schemas.register_join_rule", rule)
+	if err != nil {
+		return err
+	}
+	return statusCall("schemas.register_join_rule", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_schema_register_join_rule(e.handle, byteSlice(payload), errBuf)
+		runtime.KeepAlive(payload)
 		return rc
 	})
 }
@@ -297,6 +336,22 @@ func (e *nativeEngine) schemaPluginArtifacts(_ context.Context, name string) ([]
 		return rc
 	})
 	return artifacts, err
+}
+
+func (e *nativeEngine) schemaHasNativeArtifact(_ context.Context, artifact string) (bool, error) {
+	return boolResult("schemas.has_native_artifact", func(out *C.uint8_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_schema_has_native_artifact(e.handle, stringSlice(artifact), out, errBuf)
+		runtime.KeepAlive(artifact)
+		return rc
+	})
+}
+
+func (e *nativeEngine) schemaAnchorConcepts(_ context.Context) ([]AnchorConcept, error) {
+	var concepts []AnchorConcept
+	err := jsonResult("schemas.anchor_concepts", &concepts, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_schema_anchor_concepts_json(e.handle, out, errBuf)
+	})
+	return concepts, err
 }
 
 // --- graph ---------------------------------------------------------------
@@ -361,17 +416,17 @@ func (e *nativeEngine) graphEdgeCount(_ context.Context) (uint64, error) {
 func (e *nativeEngine) graphStats(_ context.Context) (GraphStats, error) {
 	var stats GraphStats
 	err := jsonResult("graph.stats", &stats, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		return C.cstx_graph_stats(e.handle, out, errBuf)
+		return C.cstx_graph_stats(e.handle, 0, 0, out, errBuf)
 	})
 	return stats, err
 }
 
-func (e *nativeEngine) graphNodes(_ context.Context, filter NodeFilter, options CollectionOptions) (nodeIter, error) {
+func (e *nativeEngine) graphNodes(_ context.Context, filter NodeFilter, options CollectionOptions) (graphCursor, error) {
 	filterJSON := marshal(filter)
 	optionsJSON := marshal(options)
-	var iter *C.CstxNodeIterator
+	var cursor *C.CstxGraphCursor
 	err := statusCall("graph.nodes", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_nodes(e.handle, byteSlice(filterJSON), byteSlice(optionsJSON), &iter, errBuf)
+		rc := C.cstx_graph_nodes(e.handle, byteSlice(filterJSON), byteSlice(optionsJSON), &cursor, errBuf)
 		runtime.KeepAlive(filterJSON)
 		runtime.KeepAlive(optionsJSON)
 		return rc
@@ -379,15 +434,15 @@ func (e *nativeEngine) graphNodes(_ context.Context, filter NodeFilter, options 
 	if err != nil {
 		return nil, err
 	}
-	return newNodeIter(iter), nil
+	return newNativeGraphCursor(cursor), nil
 }
 
-func (e *nativeEngine) graphEdges(_ context.Context, filter EdgeFilter, options CollectionOptions) (edgeIter, error) {
+func (e *nativeEngine) graphEdges(_ context.Context, filter EdgeFilter, options CollectionOptions) (graphCursor, error) {
 	filterJSON := marshal(filter)
 	optionsJSON := marshal(options)
-	var iter *C.CstxEdgeIterator
+	var cursor *C.CstxGraphCursor
 	err := statusCall("graph.edges", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_edges(e.handle, byteSlice(filterJSON), byteSlice(optionsJSON), &iter, errBuf)
+		rc := C.cstx_graph_edges(e.handle, byteSlice(filterJSON), byteSlice(optionsJSON), &cursor, errBuf)
 		runtime.KeepAlive(filterJSON)
 		runtime.KeepAlive(optionsJSON)
 		return rc
@@ -395,14 +450,14 @@ func (e *nativeEngine) graphEdges(_ context.Context, filter EdgeFilter, options 
 	if err != nil {
 		return nil, err
 	}
-	return newEdgeIter(iter), nil
+	return newNativeGraphCursor(cursor), nil
 }
 
-func (e *nativeEngine) graphNeighbors(_ context.Context, nodeID, direction string, options CollectionOptions) (nodeIter, error) {
+func (e *nativeEngine) graphNeighbors(_ context.Context, nodeID, direction string, options CollectionOptions) (graphCursor, error) {
 	optionsJSON := marshal(options)
-	var iter *C.CstxNodeIterator
+	var cursor *C.CstxGraphCursor
 	err := statusCall("graph.neighbors", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_neighbors(e.handle, stringSlice(nodeID), stringSlice(direction), byteSlice(optionsJSON), &iter, errBuf)
+		rc := C.cstx_graph_neighbors(e.handle, stringSlice(nodeID), stringSlice(direction), byteSlice(optionsJSON), &cursor, errBuf)
 		runtime.KeepAlive(nodeID)
 		runtime.KeepAlive(direction)
 		runtime.KeepAlive(optionsJSON)
@@ -411,14 +466,14 @@ func (e *nativeEngine) graphNeighbors(_ context.Context, nodeID, direction strin
 	if err != nil {
 		return nil, err
 	}
-	return newNodeIter(iter), nil
+	return newNativeGraphCursor(cursor), nil
 }
 
-func (e *nativeEngine) graphQuery(_ context.Context, expression string, options QueryOptions) (nodeIter, error) {
+func (e *nativeEngine) graphQuery(_ context.Context, expression string, options QueryOptions) (graphCursor, error) {
 	optionsJSON := marshal(options)
-	var iter *C.CstxNodeIterator
+	var cursor *C.CstxGraphCursor
 	err := statusCall("graph.query", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_query(e.handle, stringSlice(expression), byteSlice(optionsJSON), &iter, errBuf)
+		rc := C.cstx_graph_query(e.handle, stringSlice(expression), byteSlice(optionsJSON), &cursor, errBuf)
 		runtime.KeepAlive(expression)
 		runtime.KeepAlive(optionsJSON)
 		return rc
@@ -426,29 +481,77 @@ func (e *nativeEngine) graphQuery(_ context.Context, expression string, options 
 	if err != nil {
 		return nil, err
 	}
-	return newNodeIter(iter), nil
+	return newNativeGraphCursor(cursor), nil
 }
 
-func (e *nativeEngine) graphDifference(_ context.Context, other engine, nodeType string) (engine, error) {
-	right, ok := other.(*nativeEngine)
-	if !ok || right == nil || right.handle == nil {
-		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.difference", Message: "other runtime is invalid"}
+func (e *nativeEngine) graphAnalyze(_ context.Context, algorithm any, selection *string) (uint8, bool, graphCursor, error) {
+	payload, err := marshalInput("graph.analyze", algorithm)
+	if err != nil {
+		return 0, false, nil, err
 	}
-	var output *C.CstxHandle
-	err := statusCall("graph.difference", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_difference(e.handle, right.handle, stringSlice(nodeType), &output, errBuf)
-		runtime.KeepAlive(nodeType)
+	var kind C.uint8_t
+	var boolean C.uint8_t
+	var cursor *C.CstxGraphCursor
+	var selectionSlice C.CstxSlice
+	if selection != nil {
+		selectionSlice = stringSlice(*selection)
+	}
+	err = statusCall("graph.analyze", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_analyze(
+			e.handle,
+			byteSlice(payload),
+			selectionSlice,
+			&kind,
+			&boolean,
+			&cursor,
+			errBuf,
+		)
+		runtime.KeepAlive(payload)
+		runtime.KeepAlive(selection)
 		return rc
 	})
 	if err != nil {
-		return nil, err
+		return 0, false, nil, err
 	}
-	return &nativeEngine{handle: output}, nil
+	if cursor == nil {
+		return uint8(kind), boolean != 0, nil, nil
+	}
+	return uint8(kind), boolean != 0, newNativeGraphCursor(cursor), nil
 }
 
 // --- repository ----------------------------------------------------------
 
-func (e *nativeEngine) repoCommit(_ context.Context, refName, message string, metadata any) (Commit, error) {
+func (e *nativeEngine) repoResolve(_ context.Context, revision string) (string, error) {
+	var resolved string
+	err := jsonResult("repo.resolve", &resolved, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_resolve(e.handle, stringSlice(revision), out, errBuf)
+		runtime.KeepAlive(revision)
+		return rc
+	})
+	return resolved, err
+}
+
+func (e *nativeEngine) repoCheckout(_ context.Context, revision string, force bool) (Commit, error) {
+	var commit Commit
+	var nativeForce C.uint8_t
+	if force {
+		nativeForce = 1
+	}
+	err := jsonResult("repo.checkout", &commit, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_checkout(e.handle, stringSlice(revision), nativeForce, out, errBuf)
+		runtime.KeepAlive(revision)
+		return rc
+	})
+	return commit, err
+}
+
+func (e *nativeEngine) repoCommit(
+	_ context.Context,
+	message string,
+	refName string,
+	expectedHead *string,
+	metadata any,
+) (Commit, error) {
 	var metadataJSON []byte
 	if metadata != nil {
 		var err error
@@ -459,19 +562,30 @@ func (e *nativeEngine) repoCommit(_ context.Context, refName, message string, me
 	}
 	var commit Commit
 	err := jsonResult("repo.commit", &commit, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_commit(e.handle, stringSlice(refName), stringSlice(message), byteSlice(metadataJSON), out, errBuf)
+		var expected C.CstxSlice
+		if expectedHead != nil {
+			expected = stringSlice(*expectedHead)
+		}
+		rc := C.cstx_repo_commit(e.handle, stringSlice(message), stringSlice(refName), expected, byteSlice(metadataJSON), out, errBuf)
 		runtime.KeepAlive(refName)
 		runtime.KeepAlive(message)
+		runtime.KeepAlive(expectedHead)
 		runtime.KeepAlive(metadataJSON)
 		return rc
 	})
 	return commit, err
 }
 
-func (e *nativeEngine) repoDiff(_ context.Context, baseRef, headRef string) (GraphDiff, error) {
+func (e *nativeEngine) repoDiff(_ context.Context, baseRef, headRef string, limit *int) (GraphDiff, error) {
 	var diff GraphDiff
+	var nativeLimit C.size_t
+	var hasLimit C.uint8_t
+	if limit != nil {
+		nativeLimit = C.size_t(*limit)
+		hasLimit = 1
+	}
 	err := jsonResult("repo.diff", &diff, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_diff(e.handle, stringSlice(baseRef), stringSlice(headRef), out, errBuf)
+		rc := C.cstx_repo_diff(e.handle, stringSlice(baseRef), stringSlice(headRef), nativeLimit, hasLimit, out, errBuf)
 		runtime.KeepAlive(baseRef)
 		runtime.KeepAlive(headRef)
 		return rc
@@ -479,49 +593,15 @@ func (e *nativeEngine) repoDiff(_ context.Context, baseRef, headRef string) (Gra
 	return diff, err
 }
 
-func (e *nativeEngine) repoDump(_ context.Context, compression string) ([]byte, error) {
-	var out, errBuf C.CstxBuffer
-	rc := C.cstx_repo_dump(e.handle, stringSlice(compression), &out, &errBuf)
-	runtime.KeepAlive(compression)
-	if err := statusError(rc, "repo.dump", &errBuf); err != nil {
-		C.cstx_buffer_free(&out)
-		return nil, err
-	}
-	return takeBuffer(&out), nil
-}
-
-func (e *nativeEngine) repoLoad(_ context.Context, data []byte, compression string) (uint64, error) {
-	return countResult("repo.load", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_load(e.handle, byteSlice(data), stringSlice(compression), out, errBuf)
-		runtime.KeepAlive(data)
-		runtime.KeepAlive(compression)
+func (e *nativeEngine) repoDiffStat(_ context.Context, baseRef, headRef string) (Delta, error) {
+	var value Delta
+	err := jsonResult("repo.diff_stat", &value, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_diff_stat(e.handle, stringSlice(baseRef), stringSlice(headRef), out, errBuf)
+		runtime.KeepAlive(baseRef)
+		runtime.KeepAlive(headRef)
 		return rc
 	})
-}
-
-func (e *nativeEngine) repoDumpJSON(_ context.Context) ([]byte, error) {
-	var out, errBuf C.CstxBuffer
-	if err := statusError(C.cstx_repo_dump_json(e.handle, &out, &errBuf), "repo.dump_json", &errBuf); err != nil {
-		C.cstx_buffer_free(&out)
-		return nil, err
-	}
-	return takeBuffer(&out), nil
-}
-
-func (e *nativeEngine) repoLoadJSON(_ context.Context, data []byte) (uint64, error) {
-	return countResult("repo.load_json", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_load_json(e.handle, byteSlice(data), out, errBuf)
-		runtime.KeepAlive(data)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoSnapshotFingerprint(_ context.Context) (string, error) {
-	var fingerprint string
-	err := jsonResult("repo.snapshot_fingerprint", &fingerprint, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		return C.cstx_repo_snapshot_fingerprint(e.handle, out, errBuf)
-	})
-	return fingerprint, err
+	return value, err
 }
 
 func (e *nativeEngine) repoHead(_ context.Context, refName string) (*string, error) {
@@ -534,201 +614,139 @@ func (e *nativeEngine) repoHead(_ context.Context, refName string) (*string, err
 	return head, err
 }
 
-func (e *nativeEngine) repoRefs(_ context.Context) ([]Ref, error) {
-	var refs []Ref
-	err := jsonResult("repo.refs", &refs, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		return C.cstx_repo_refs(e.handle, out, errBuf)
+func (e *nativeEngine) repoLog(_ context.Context, revision string, limit int) ([]map[string]any, error) {
+	var commits []map[string]any
+	err := jsonResult("repo.log", &commits, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_log(e.handle, stringSlice(revision), C.size_t(limit), out, errBuf)
+		runtime.KeepAlive(revision)
+		return rc
 	})
-	return refs, err
+	return commits, err
 }
 
-func (e *nativeEngine) repoCommitDelta(_ context.Context, request CommitDeltaRequest) (Commit, error) {
-	parent, err := e.repoHead(context.Background(), request.RefName)
-	if err != nil {
-		return Commit{}, err
+func (e *nativeEngine) repoHistory(
+	_ context.Context,
+	entityID string,
+	revision string,
+	limit *int,
+) ([]map[string]any, error) {
+	var entries []map[string]any
+	var nativeLimit C.size_t
+	var hasLimit C.uint8_t
+	if limit != nil {
+		nativeLimit = C.size_t(*limit)
+		hasLimit = 1
 	}
-	requestJSON := marshal(request)
-	var result struct {
-		CommitHash string `json:"commit_hash"`
-		TreeHash   string `json:"tree_hash"`
-		Stats      any    `json:"stats"`
-	}
-	err = jsonResult("repo.commit_delta", &result, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_commit_delta_json(e.handle, byteSlice(requestJSON), out, errBuf)
-		runtime.KeepAlive(requestJSON)
-		return rc
-	})
-	if err != nil {
-		return Commit{}, err
-	}
-	parentHash := ""
-	if parent != nil {
-		parentHash = *parent
-	}
-	return Commit{
-		ID: result.CommitHash, Tree: result.TreeHash, Parent: parentHash,
-		Message: request.Message, Metadata: request.Metadata, Stats: result.Stats,
-		CreatedAt: request.CreatedAt,
-	}, nil
-}
-
-func (e *nativeEngine) repoSetRef(_ context.Context, refName, commitHash string) error {
-	return statusCall("repo.set_ref", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_set_ref(e.handle, stringSlice(refName), stringSlice(commitHash), errBuf)
-		runtime.KeepAlive(refName)
-		runtime.KeepAlive(commitHash)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoImportCommit(_ context.Context, hash string, data json.RawMessage) error {
-	return statusCall("repo.import_commit", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_import_commit(e.handle, stringSlice(hash), byteSlice(data), errBuf)
-		runtime.KeepAlive(hash)
-		runtime.KeepAlive(data)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoExportCommit(_ context.Context, hash string) (json.RawMessage, error) {
-	return bufferResult("repo.export_commit", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_export_commit_json(e.handle, stringSlice(hash), out, errBuf)
-		runtime.KeepAlive(hash)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoExportTreeObjects(_ context.Context, rootHash string) (json.RawMessage, error) {
-	return bufferResult("repo.export_tree_objects", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_export_tree_objects_json(e.handle, stringSlice(rootHash), out, errBuf)
-		runtime.KeepAlive(rootHash)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoImportTreeObjects(_ context.Context, objects json.RawMessage) error {
-	return statusCall("repo.import_tree_objects", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_import_tree_objects(e.handle, byteSlice(objects), errBuf)
-		runtime.KeepAlive(objects)
-		return rc
-	})
-}
-
-func (e *nativeEngine) repoTreeEntries(_ context.Context, rootHash string, types []string) (map[string]map[string]string, error) {
-	typesJSON := marshal(orEmpty(types))
-	var entries map[string]map[string]string
-	err := jsonResult("repo.tree_entries", &entries, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_tree_entries_json(e.handle, stringSlice(rootHash), byteSlice(typesJSON), out, errBuf)
-		runtime.KeepAlive(rootHash)
-		runtime.KeepAlive(typesJSON)
+	err := jsonResult("repo.history", &entries, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_history(e.handle, stringSlice(entityID), stringSlice(revision), nativeLimit, hasLimit, out, errBuf)
+		runtime.KeepAlive(entityID)
+		runtime.KeepAlive(revision)
 		return rc
 	})
 	return entries, err
 }
 
-func (e *nativeEngine) repoFindTreeEntry(_ context.Context, rootHash, elementID string) (*string, error) {
-	var hash *string
-	err := jsonResult("repo.find_tree_entry", &hash, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_find_tree_entry_json(e.handle, stringSlice(rootHash), stringSlice(elementID), out, errBuf)
-		runtime.KeepAlive(rootHash)
-		runtime.KeepAlive(elementID)
+func (e *nativeEngine) repoBranch(_ context.Context, name, startPoint string) (string, error) {
+	var commit string
+	err := jsonResult("repo.branch", &commit, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_branch(e.handle, stringSlice(name), stringSlice(startPoint), out, errBuf)
+		runtime.KeepAlive(name)
+		runtime.KeepAlive(startPoint)
 		return rc
 	})
-	return hash, err
+	return commit, err
 }
 
-func (e *nativeEngine) repoDiffTreeEntries(_ context.Context, baseRoot, headRoot string) (TreeEntryDiff, error) {
-	var diff TreeEntryDiff
-	err := jsonResult("repo.diff_tree_entries", &diff, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_diff_tree_entries_json(e.handle, stringSlice(baseRoot), stringSlice(headRoot), out, errBuf)
-		runtime.KeepAlive(baseRoot)
-		runtime.KeepAlive(headRoot)
+func (e *nativeEngine) repoMerge(
+	_ context.Context,
+	source string,
+	target string,
+	expectedHead *string,
+	message *string,
+) (Commit, error) {
+	var commit Commit
+	err := jsonResult("repo.merge", &commit, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		var expected, commitMessage C.CstxSlice
+		if expectedHead != nil {
+			expected = stringSlice(*expectedHead)
+		}
+		if message != nil {
+			commitMessage = stringSlice(*message)
+		}
+		rc := C.cstx_repo_merge(e.handle, stringSlice(source), stringSlice(target), expected, commitMessage, out, errBuf)
+		runtime.KeepAlive(source)
+		runtime.KeepAlive(target)
+		runtime.KeepAlive(expectedHead)
+		runtime.KeepAlive(message)
 		return rc
 	})
-	return diff, err
+	return commit, err
 }
 
-func (e *nativeEngine) repoTreeRootStats(_ context.Context, rootHash string) (map[string]int64, error) {
-	var stats map[string]int64
-	err := jsonResult("repo.tree_root_stats", &stats, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_tree_root_stats_json(e.handle, stringSlice(rootHash), out, errBuf)
-		runtime.KeepAlive(rootHash)
+func (e *nativeEngine) repoStat(
+	_ context.Context,
+	revision string,
+	excludeMask uint64,
+	includeMask uint64,
+) (GraphStats, error) {
+	var value GraphStats
+	err := jsonResult("repo.stat", &value, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_stat(e.handle, stringSlice(revision), C.uint64_t(excludeMask), C.uint64_t(includeMask), out, errBuf)
+		runtime.KeepAlive(revision)
 		return rc
 	})
-	return stats, err
+	return value, err
 }
 
-// --- iterators -----------------------------------------------------------
-type nativeNodeIter struct{ iter *C.CstxNodeIterator }
-
-func newNodeIter(iter *C.CstxNodeIterator) *nativeNodeIter {
-	it := &nativeNodeIter{iter: iter}
-	runtime.SetFinalizer(it, (*nativeNodeIter).close)
-	return it
+func (e *nativeEngine) repoDelta(
+	_ context.Context,
+	revision string,
+	startTimestamp *int64,
+	endTimestamp *int64,
+) (Delta, error) {
+	var value Delta
+	var start, end C.int64_t
+	var hasStart, hasEnd C.uint8_t
+	if startTimestamp != nil {
+		start = C.int64_t(*startTimestamp)
+		hasStart = 1
+	}
+	if endTimestamp != nil {
+		end = C.int64_t(*endTimestamp)
+		hasEnd = 1
+	}
+	err := jsonResult("repo.delta", &value, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_delta(e.handle, stringSlice(revision), start, hasStart, end, hasEnd, out, errBuf)
+		runtime.KeepAlive(revision)
+		return rc
+	})
+	return value, err
 }
 
-func (i *nativeNodeIter) next(_ context.Context) (Node, bool, error) {
-	var node Node
-	if i.iter == nil {
-		return node, false, nil
-	}
-	var out, errBuf C.CstxBuffer
-	var hasValue C.uint8_t
-	if err := statusError(C.cstx_node_iterator_next(i.iter, &out, &hasValue, &errBuf), "cursor.next", &errBuf); err != nil {
-		C.cstx_buffer_free(&out)
-		return node, false, err
-	}
-	if hasValue == 0 {
-		C.cstx_buffer_free(&out)
-		return node, false, nil
-	}
-	if err := json.Unmarshal(takeBuffer(&out), &node); err != nil {
-		return node, false, err
-	}
-	return node, true, nil
+// --- unified graph cursor ------------------------------------------------
+type nativeGraphCursor struct{ cursor *C.CstxGraphCursor }
+
+func newNativeGraphCursor(cursor *C.CstxGraphCursor) *nativeGraphCursor {
+	result := &nativeGraphCursor{cursor: cursor}
+	runtime.SetFinalizer(result, (*nativeGraphCursor).close)
+	return result
 }
 
-func (i *nativeNodeIter) close() {
-	if i.iter != nil {
-		C.cstx_node_iterator_free(i.iter)
-		i.iter = nil
-		runtime.SetFinalizer(i, nil)
+func (c *nativeGraphCursor) page(_ context.Context, limit, page int) (CursorPage, error) {
+	if c.cursor == nil {
+		return CursorPage{}, &Error{Code: CodeInvalidArgument, Operation: "cursor.page", Message: "cursor is closed"}
 	}
+	var result CursorPage
+	err := jsonResult("cursor.page", &result, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_graph_cursor_page(c.cursor, C.size_t(limit), C.size_t(page), out, errBuf)
+	})
+	return result, err
 }
 
-type nativeEdgeIter struct{ iter *C.CstxEdgeIterator }
-
-func newEdgeIter(iter *C.CstxEdgeIterator) *nativeEdgeIter {
-	it := &nativeEdgeIter{iter: iter}
-	runtime.SetFinalizer(it, (*nativeEdgeIter).close)
-	return it
-}
-
-func (i *nativeEdgeIter) next(_ context.Context) (Edge, bool, error) {
-	var edge Edge
-	if i.iter == nil {
-		return edge, false, nil
-	}
-	var out, errBuf C.CstxBuffer
-	var hasValue C.uint8_t
-	if err := statusError(C.cstx_edge_iterator_next(i.iter, &out, &hasValue, &errBuf), "cursor.next", &errBuf); err != nil {
-		C.cstx_buffer_free(&out)
-		return edge, false, err
-	}
-	if hasValue == 0 {
-		C.cstx_buffer_free(&out)
-		return edge, false, nil
-	}
-	if err := json.Unmarshal(takeBuffer(&out), &edge); err != nil {
-		return edge, false, err
-	}
-	return edge, true, nil
-}
-
-func (i *nativeEdgeIter) close() {
-	if i.iter != nil {
-		C.cstx_edge_iterator_free(i.iter)
-		i.iter = nil
-		runtime.SetFinalizer(i, nil)
+func (c *nativeGraphCursor) close() {
+	if c.cursor != nil {
+		C.cstx_graph_cursor_free(c.cursor)
+		c.cursor = nil
+		runtime.SetFinalizer(c, nil)
 	}
 }

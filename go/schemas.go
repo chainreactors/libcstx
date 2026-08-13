@@ -5,13 +5,37 @@ import "context"
 // Schemas is the schema/plugin namespace of a CSTX runtime.
 type Schemas struct{ eng engine }
 
-// Register adds canonical validation metadata for one node type. An empty
+// Import atomically validates and registers a portable schema contract.
+func (s *Schemas) Import(ctx context.Context, contract SchemaContract) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	return s.eng.schemaImport(ctx, contract)
+}
+
+// Export returns the complete portable schema contract.
+func (s *Schemas) Export(ctx context.Context) (SchemaContract, error) {
+	if err := contextError(ctx); err != nil {
+		return SchemaContract{}, err
+	}
+	return s.eng.schemaExport(ctx)
+}
+
+// Register adds CSTX validation metadata for one node type. An empty
 // valueField means no designated value field.
 func (s *Schemas) Register(ctx context.Context, nodeType string, schema map[string]any, valueField string) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
 	return s.eng.schemaRegister(ctx, nodeType, schema, valueField)
+}
+
+// RegisterJoinRule registers one declarative native linker rule.
+func (s *Schemas) RegisterJoinRule(ctx context.Context, rule JoinRuleSpec) error {
+	if err := contextError(ctx); err != nil {
+		return err
+	}
+	return s.eng.schemaRegisterJoinRule(ctx, rule)
 }
 
 // Contains reports whether a schema exists for the node type.
@@ -69,4 +93,20 @@ func (s *Schemas) PluginArtifacts(ctx context.Context, name string) ([]string, e
 		return nil, err
 	}
 	return s.eng.schemaPluginArtifacts(ctx, name)
+}
+
+// HasNativeArtifact reports whether a linked native parser supports an artifact.
+func (s *Schemas) HasNativeArtifact(ctx context.Context, artifact string) (bool, error) {
+	if err := contextError(ctx); err != nil {
+		return false, err
+	}
+	return s.eng.schemaHasNativeArtifact(ctx, artifact)
+}
+
+// AnchorConcepts lists native concepts and their member node types.
+func (s *Schemas) AnchorConcepts(ctx context.Context) ([]AnchorConcept, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	return s.eng.schemaAnchorConcepts(ctx)
 }

@@ -1,6 +1,9 @@
 package cstx
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"fmt"
+)
 
 // NodeFlags are engine-compatible bit constants. Graph APIs accept ordinary
 // uint64 masks built from these values.
@@ -31,9 +34,9 @@ const (
 	OrderIDDesc      Order = "id_desc"
 )
 
-// Node is the canonical graph node exchanged with the Rust runtime. Model
-// holds schema-typed fields plus the reserved keys "__node_type__",
-// "cstx_flags", "created_at", and "updated_at".
+// Node is the CSTX graph node exchanged with the Rust runtime. Model
+// holds schema-typed fields plus the reserved keys "__node_type__" and
+// "cstx_flags".
 type Node struct {
 	ID      string         `json:"id"`
 	Type    string         `json:"type"`
@@ -59,7 +62,7 @@ func (n Node) MarshalJSON() ([]byte, error) {
 	return json.Marshal(wire(n))
 }
 
-// Edge is the canonical graph relationship exchanged with the Rust runtime.
+// Edge is the CSTX graph relationship exchanged with the Rust runtime.
 type Edge struct {
 	ID           string         `json:"id"`
 	SourceID     string         `json:"source_id"`
@@ -88,6 +91,16 @@ type GraphStats struct {
 	Sources map[string]int64 `json:"sources"`
 }
 
+// Delta counts graph elements changed by commits in one time range.
+type Delta struct {
+	AddedNodes   uint64 `json:"added_nodes"`
+	UpdatedNodes uint64 `json:"updated_nodes"`
+	RemovedNodes uint64 `json:"removed_nodes"`
+	AddedEdges   uint64 `json:"added_edges"`
+	UpdatedEdges uint64 `json:"updated_edges"`
+	RemovedEdges uint64 `json:"removed_edges"`
+}
+
 // ChangeSet lists the IDs changed by one successfully committed mutation.
 type ChangeSet struct {
 	AddedNodeIDs   []string `json:"added_node_ids"`
@@ -105,15 +118,14 @@ func (c ChangeSet) Affected() int {
 		len(c.AddedEdgeIDs) + len(c.UpdatedEdgeIDs) + len(c.RemovedEdgeIDs)
 }
 
-// Commit describes one immutable graph tree on a repository ref.
+// Commit describes one immutable repository revision.
 type Commit struct {
-	ID        string `json:"id"`
-	Tree      string `json:"tree"`
-	Parent    string `json:"parent"`
-	Message   string `json:"message"`
-	Metadata  any    `json:"metadata"`
-	Stats     any    `json:"stats"`
-	CreatedAt int64  `json:"created_at"`
+	ID        string   `json:"id"`
+	Parents   []string `json:"parents"`
+	Message   string   `json:"message"`
+	Metadata  any      `json:"metadata"`
+	Stats     Delta    `json:"stats"`
+	CreatedAt int64    `json:"created_at"`
 }
 
 // GraphDiff groups added, removed, and modified element IDs by element type.
@@ -121,34 +133,85 @@ type GraphDiff struct {
 	Added    map[string][]string `json:"added"`
 	Removed  map[string][]string `json:"removed"`
 	Modified map[string][]string `json:"modified"`
+	// Truncated reports whether a limit stopped the diff before the last
+	// change. An empty group is otherwise ambiguous between "nothing of that
+	// type changed" and "the limit ran out first".
+	Truncated bool `json:"truncated"`
 }
 
-// CASIndex contains canonical graph entries and their serialized immutable
-// objects. Object bytes remain raw so storage adapters do not deserialize and
-// reserialize data at the language boundary.
-type CASIndex struct {
-	Entries map[string]map[string]string `json:"entries"`
-	Objects map[string]json.RawMessage   `json:"objects"`
+// JoinRuleSpec is the portable native-linker rule shared by all bindings.
+type JoinRuleSpec struct {
+	LeftType      string  `json:"left_type"`
+	RightType     string  `json:"right_type"`
+	Relation      string  `json:"relation"`
+	LeftKey       string  `json:"left_key"`
+	RightKey      string  `json:"right_key"`
+	Predicted     bool    `json:"predicted"`
+	LeftTargetID  *string `json:"left_target_id,omitempty"`
+	RightSourceID *string `json:"right_source_id,omitempty"`
 }
 
-// CommitDeltaRequest commits pre-indexed element hashes and removals onto a ref.
-// The referenced objects must already exist in the repository object store.
-type CommitDeltaRequest struct {
-	DeltaEntries   map[string]map[string]string `json:"delta_entries"`
-	RemovedNodeIDs []string                     `json:"removed_node_ids"`
-	RemovedEdgeIDs []string                     `json:"removed_edge_ids"`
-	RefName        string                       `json:"ref_name"`
-	Message        string                       `json:"message"`
-	Metadata       any                          `json:"metadata"`
-	CreatedAt      int64                        `json:"created_at"`
+// SCOSchemaContract describes one portable node schema.
+type SCOSchemaContract struct {
+	Schema     any            `json:"schema"`
+	ValueField *string        `json:"value_field"`
+	Metadata   map[string]any `json:"metadata"`
 }
 
-// TreeEntryChange contains the base and head content hashes for one element.
-// A nil side means the element is absent from that tree.
-type TreeEntryChange [2]*string
+// SROSchemaContract describes one portable relationship schema.
+type SROSchemaContract struct {
+	Schema   any            `json:"schema"`
+	Metadata map[string]any `json:"metadata"`
+}
 
-// TreeEntryDiff groups raw content-hash changes by element type and ID.
-type TreeEntryDiff map[string]map[string]TreeEntryChange
+// ParserSchemaContract describes one portable parser input contract.
+type ParserSchemaContract struct {
+	InputSchema any            `json:"input_schema"`
+	Metadata    map[string]any `json:"metadata"`
+}
+
+// PluginSchemaContract groups schemas published by one CSTX plugin.
+type PluginSchemaContract struct {
+	Version string                          `json:"version"`
+	SCO     map[string]SCOSchemaContract    `json:"sco"`
+	SRO     map[string]SROSchemaContract    `json:"sro"`
+	Parsers map[string]ParserSchemaContract `json:"parsers"`
+}
+
+// SchemaContract is the atomic schema exchange unit shared by all bindings.
+type SchemaContract struct {
+	Format  string                          `json:"format"`
+	Plugins map[string]PluginSchemaContract `json:"plugins"`
+}
+
+// AnchorConcept names one native concept and its member node types.
+type AnchorConcept struct {
+	Name      string
+	NodeTypes []string
+}
+
+// UnmarshalJSON decodes the Rust (name, node_types) tuple transport.
+func (c *AnchorConcept) UnmarshalJSON(data []byte) error {
+	var pair struct {
+		Name      string
+		NodeTypes []string
+	}
+	var wire []json.RawMessage
+	if err := json.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if len(wire) != 2 {
+		return fmt.Errorf("cstx: anchor concept must be a two-item tuple")
+	}
+	if err := json.Unmarshal(wire[0], &pair.Name); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(wire[1], &pair.NodeTypes); err != nil {
+		return err
+	}
+	c.Name, c.NodeTypes = pair.Name, pair.NodeTypes
+	return nil
+}
 
 // Ref is one named repository reference and its commit ID.
 type Ref struct {

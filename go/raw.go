@@ -21,7 +21,6 @@ type rawEngine interface {
 	rawGraphNodeTypes(context.Context) ([]byte, error)
 	rawGraphNodesPage(context.Context, []byte) ([]byte, error)
 	rawGraphLink(context.Context, []byte, string) ([]byte, error)
-	rawRepositoryIndexGraph(context.Context) ([]byte, error)
 	rawRAGIndex(context.Context, []byte) (rawRAGIndexSession, error)
 	rawRAGRetrieve(context.Context, []byte) (rawRAGRetrieval, error)
 }
@@ -65,7 +64,7 @@ func (r *Raw) IngestNative(ctx context.Context, plugin, artifact string, data []
 	return r.eng.rawGraphIngestNative(ctx, plugin, artifact, data)
 }
 
-// AddNodes submits the canonical JSON node array without Go DTO conversion.
+// AddNodes submits the CSTX JSON node array without Go DTO conversion.
 func (r *Raw) AddNodes(ctx context.Context, nodes json.RawMessage) (uint64, error) {
 	if err := rawContext(ctx); err != nil {
 		return 0, err
@@ -73,7 +72,7 @@ func (r *Raw) AddNodes(ctx context.Context, nodes json.RawMessage) (uint64, erro
 	return r.eng.rawGraphAddNodes(ctx, nodes)
 }
 
-// AddEdges submits the canonical JSON edge array without Go DTO conversion.
+// AddEdges submits the CSTX JSON edge array without Go DTO conversion.
 func (r *Raw) AddEdges(ctx context.Context, edges json.RawMessage) (uint64, error) {
 	if err := rawContext(ctx); err != nil {
 		return 0, err
@@ -112,14 +111,6 @@ func (r *Raw) Link(ctx context.Context, nodeIDs json.RawMessage, dataSource stri
 		return nil, err
 	}
 	return r.eng.rawGraphLink(ctx, nodeIDs, dataSource)
-}
-
-// IndexGraph returns canonical CAS entries and objects as JSON.
-func (r *Raw) IndexGraph(ctx context.Context) (json.RawMessage, error) {
-	if err := rawContext(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.rawRepositoryIndexGraph(ctx)
 }
 
 // RAGIndex opens an opaque native projection session from a JSON request.

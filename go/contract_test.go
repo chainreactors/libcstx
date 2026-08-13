@@ -42,22 +42,14 @@ func TestEdgeMatchesTransportContract(t *testing.T) {
 	}
 }
 
-func TestCASIndexMatchesTransportContract(t *testing.T) {
-	got := jsonFieldNames(t, CASIndex{})
-	want := []string{"entries", "objects"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("CAS index fields drifted from Rust contract: got %v want %v", got, want)
-	}
-}
-
 func TestQueryOptionsMatchesRustTransportContract(t *testing.T) {
 	got := jsonFieldNames(t, QueryOptions{})
-	want := []string{"collection", "exclude_mask", "include_mask", "offset"}
+	want := []string{"collection", "exclude_mask", "include_mask"}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("query option fields drifted from Rust contract: got %v want %v", got, want)
 	}
 
-	payload, err := json.Marshal(QueryOptions{Offset: 3, ExcludeMask: 5, IncludeMask: 8})
+	payload, err := json.Marshal(QueryOptions{ExcludeMask: 5, IncludeMask: 8})
 	if err != nil {
 		t.Fatalf("marshal query options: %v", err)
 	}
@@ -65,7 +57,7 @@ func TestQueryOptionsMatchesRustTransportContract(t *testing.T) {
 	if err := json.Unmarshal(payload, &wire); err != nil {
 		t.Fatalf("unmarshal query options: %v", err)
 	}
-	if wire["offset"] != float64(3) || wire["exclude_mask"] != float64(5) || wire["include_mask"] != float64(8) {
+	if wire["exclude_mask"] != float64(5) || wire["include_mask"] != float64(8) {
 		t.Fatalf("query option values drifted from Rust contract: %s", payload)
 	}
 }

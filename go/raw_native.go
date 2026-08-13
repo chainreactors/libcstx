@@ -36,7 +36,7 @@ func (e *nativeEngine) rawGraphIngestNative(_ context.Context, plugin, artifact 
 
 func (e *nativeEngine) rawGraphAddNodes(_ context.Context, nodes []byte) (uint64, error) {
 	return countResult("graph.add_nodes_json", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_add_nodes_json(e.handle, byteSlice(nodes), out, errBuf)
+		rc := C.cstx_graph_add_nodes(e.handle, byteSlice(nodes), out, errBuf)
 		runtime.KeepAlive(nodes)
 		return rc
 	})
@@ -44,7 +44,7 @@ func (e *nativeEngine) rawGraphAddNodes(_ context.Context, nodes []byte) (uint64
 
 func (e *nativeEngine) rawGraphAddEdges(_ context.Context, edges []byte) (uint64, error) {
 	return countResult("graph.add_edges_json", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_add_edges_json(e.handle, byteSlice(edges), out, errBuf)
+		rc := C.cstx_graph_add_edges(e.handle, byteSlice(edges), out, errBuf)
 		runtime.KeepAlive(edges)
 		return rc
 	})
@@ -78,12 +78,6 @@ func (e *nativeEngine) rawGraphLink(_ context.Context, nodeIDs []byte, dataSourc
 		runtime.KeepAlive(nodeIDs)
 		runtime.KeepAlive(dataSource)
 		return rc
-	})
-}
-
-func (e *nativeEngine) rawRepositoryIndexGraph(_ context.Context) ([]byte, error) {
-	return bufferResult("repo.index_graph", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		return C.cstx_repo_index_graph_json(e.handle, out, errBuf)
 	})
 }
 

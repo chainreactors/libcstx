@@ -1,15 +1,14 @@
-"""Low-level CSTX v0.3 runtime implemented by the shared Rust core."""
+"""Low-level CSTX runtime implemented by the shared Rust core."""
 
 from cstxpy._cstxpy import (
     CSTX,
     CSTXGraph,
     CSTXError,
-    EdgeCursor,
+    GraphCursor,
     Rag,
     RagRetrieval,
     RagIndexSession,
     RagRecordCursor,
-    NodeCursor,
     NodeFlags,
     Repository,
     Schemas,
@@ -27,8 +26,7 @@ __all__ = [
     "RagIndexSession",
     "RagRecordCursor",
     "Repository",
-    "NodeCursor",
-    "EdgeCursor",
+    "GraphCursor",
     "NodeFlags",
     "is_path_expression",
     "__version__",

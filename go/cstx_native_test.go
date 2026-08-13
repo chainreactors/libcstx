@@ -12,8 +12,8 @@ import (
 
 var testContext = context.Background()
 
-//go:embed testdata/v03_conformance.json
-var v03ConformanceFixture []byte
+//go:embed testdata/conformance.json
+var conformanceFixture []byte
 
 var domainSchema = map[string]any{"properties": map[string]any{"domain": map[string]any{"type": "string"}}}
 
@@ -67,6 +67,37 @@ func addDomain(t *testing.T, rt *CSTX, value string) uint64 {
 
 func TestSchemas(t *testing.T) {
 	rt := openRuntime(t)
+	valueField := "domain"
+	contract := SchemaContract{
+		Format: "cstx.schema",
+		Plugins: map[string]PluginSchemaContract{
+			"sdk-test": {
+				Version: "1",
+				SCO: map[string]SCOSchemaContract{
+					"domain": {
+						Schema:     domainSchema,
+						ValueField: &valueField,
+						Metadata:   map[string]any{},
+					},
+				},
+				SRO:     map[string]SROSchemaContract{},
+				Parsers: map[string]ParserSchemaContract{},
+			},
+		},
+	}
+	if err := rt.Schemas.Import(testContext, contract); err != nil {
+		t.Fatalf("import schema contract: %v", err)
+	}
+	exported, err := rt.Schemas.Export(testContext)
+	if err != nil || exported.Format != "cstx.schema" || exported.Plugins["sdk-test"].Version != "1" {
+		t.Fatalf("export schema contract: %+v err=%v", exported, err)
+	}
+	if err := rt.Schemas.RegisterJoinRule(testContext, JoinRuleSpec{
+		LeftType: "domain", RightType: "domain", Relation: "related",
+		LeftKey: "domain", RightKey: "domain",
+	}); err != nil {
+		t.Fatalf("register join rule: %v", err)
+	}
 
 	contains, err := rt.Schemas.Contains(testContext, "domain")
 	if err != nil || !contains {
@@ -97,8 +128,16 @@ func TestSchemas(t *testing.T) {
 	if err != nil || !slices.Contains(artifacts, "gogo") {
 		t.Fatalf("easm artifacts: %v err=%v", artifacts, err)
 	}
+	concepts, err := rt.Schemas.AnchorConcepts(testContext)
+	if err != nil || len(concepts) == 0 || concepts[0].Name == "" {
+		t.Fatalf("anchor concepts: %+v err=%v", concepts, err)
+	}
 	if err := rt.Schemas.LoadPlugin(testContext, "easm"); err != nil {
 		t.Fatalf("load easm plugin: %v", err)
+	}
+	hasGogo, err := rt.Schemas.HasNativeArtifact(testContext, "gogo")
+	if err != nil || !hasGogo {
+		t.Fatalf("has native gogo artifact: %v err=%v", hasGogo, err)
 	}
 	gogo := []byte(`{"ip":"192.0.2.1","port":"80","protocol":"tcp","status":"200"}` + "\n")
 	if affected, err := rt.Graph.Ingest(testContext, "gogo", gogo); err != nil || affected == 0 {
@@ -146,12 +185,17 @@ func TestGraphMutationAndCursors(t *testing.T) {
 		t.Fatalf("no-op add affected=%d", affected)
 	}
 
-	var ids []string
-	for cursor.Next(testContext) {
-		ids = append(ids, cursor.Node().ID)
+	page, err := cursor.Page(testContext, 1024, 1)
+	if err != nil {
+		t.Fatalf("cursor page: %v", err)
 	}
-	if err := cursor.Err(); err != nil {
-		t.Fatalf("cursor: %v", err)
+	nodes, err := page.Nodes()
+	if err != nil {
+		t.Fatalf("decode nodes: %v", err)
+	}
+	ids := make([]string, len(nodes))
+	for index, node := range nodes {
+		ids[index] = node.ID
 	}
 	if err := cursor.Close(); err != nil {
 		t.Fatalf("cursor close: %v", err)
@@ -169,28 +213,6 @@ func TestGraphMutationAndCursors(t *testing.T) {
 	}
 }
 
-func TestGraphDifference(t *testing.T) {
-	rt := openRuntime(t)
-	addDomain(t, rt, "example.com")
-	addDomain(t, rt, "www.example.com")
-	remove, err := rt.Graph.Subgraph(testContext, []string{"domain:www.example.com"}, 0)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer remove.Close()
-	result, err := rt.Graph.Difference(testContext, remove, "domain")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer result.Close()
-	if count, err := result.Graph.NodeCount(testContext); err != nil || count != 1 {
-		t.Fatalf("difference count=%d err=%v", count, err)
-	}
-	if exists, err := result.Graph.Contains(testContext, "domain:www.example.com"); err != nil || exists {
-		t.Fatalf("removed node exists=%v err=%v", exists, err)
-	}
-}
-
 func TestCursorInvalidation(t *testing.T) {
 	rt := openRuntime(t)
 	addDomain(t, rt, "example.com")
@@ -200,15 +222,12 @@ func TestCursorInvalidation(t *testing.T) {
 		t.Fatalf("nodes: %v", err)
 	}
 	defer cursor.Close()
-	if !cursor.Next(testContext) {
-		t.Fatalf("expected first node, err=%v", cursor.Err())
+	if _, err := cursor.Page(testContext, 1, 1); err != nil {
+		t.Fatalf("expected first page: %v", err)
 	}
 	addDomain(t, rt, "other.example.com")
-	if cursor.Next(testContext) {
-		t.Fatal("expected cursor to stop after mutation")
-	}
-	if !IsCode(cursor.Err(), CodeCursorInvalidated) {
-		t.Fatalf("expected CURSOR_INVALIDATED, got %v", cursor.Err())
+	if _, err := cursor.Page(testContext, 1, 1); !IsCode(err, CodeCursorInvalidated) {
+		t.Fatalf("expected CURSOR_INVALIDATED, got %v", err)
 	}
 }
 
@@ -233,14 +252,16 @@ func TestGraphEdgesNeighborsAndQuery(t *testing.T) {
 		t.Fatalf("edges: %v", err)
 	}
 	defer edges.Close()
-	if !edges.Next(testContext) {
-		t.Fatalf("expected one edge, err=%v", edges.Err())
+	edgePage, err := edges.Page(testContext, 10, 1)
+	if err != nil {
+		t.Fatalf("edge page: %v", err)
 	}
-	if edges.Edge().RelationType != "related" || edges.Edge().TargetID != "domain:example.com" {
-		t.Fatalf("unexpected edge: %+v", edges.Edge())
+	edgeItems, err := edgePage.Edges()
+	if err != nil || len(edgeItems) != 1 {
+		t.Fatalf("decode edge page: items=%v err=%v", edgeItems, err)
 	}
-	if edges.Next(testContext) {
-		t.Fatal("expected exactly one edge")
+	if edgeItems[0].RelationType != "related" || edgeItems[0].TargetID != "domain:example.com" {
+		t.Fatalf("unexpected edge: %+v", edgeItems[0])
 	}
 
 	neighbors, err := rt.Graph.Neighbors(testContext, "domain:www.example.com", "out", CollectionOptions{})
@@ -248,8 +269,13 @@ func TestGraphEdgesNeighborsAndQuery(t *testing.T) {
 		t.Fatalf("neighbors: %v", err)
 	}
 	defer neighbors.Close()
-	if !neighbors.Next(testContext) || neighbors.Node().ID != "domain:example.com" {
-		t.Fatalf("unexpected neighbor, err=%v", neighbors.Err())
+	neighborPage, err := neighbors.Page(testContext, 10, 1)
+	if err != nil {
+		t.Fatalf("neighbor page: %v", err)
+	}
+	neighborItems, err := neighborPage.Nodes()
+	if err != nil || len(neighborItems) != 1 || neighborItems[0].ID != "domain:example.com" {
+		t.Fatalf("unexpected neighbor: items=%v err=%v", neighborItems, err)
 	}
 
 	matches, err := rt.Graph.Query(testContext, "domain", QueryOptions{})
@@ -257,15 +283,141 @@ func TestGraphEdgesNeighborsAndQuery(t *testing.T) {
 		t.Fatalf("query: %v", err)
 	}
 	defer matches.Close()
-	count := 0
-	for matches.Next(testContext) {
-		count++
+	matchPage, err := matches.Page(testContext, 10, 1)
+	if err != nil {
+		t.Fatalf("query page: %v", err)
 	}
-	if err := matches.Err(); err != nil {
-		t.Fatalf("query cursor: %v", err)
+	if len(matchPage.Items) != 2 {
+		t.Fatalf("expected 2 query matches, got %d", len(matchPage.Items))
 	}
-	if count != 2 {
-		t.Fatalf("expected 2 query matches, got %d", count)
+}
+
+func TestGraphAlgorithmsAndCommunityCursor(t *testing.T) {
+	rt := openRuntime(t)
+	for _, value := range []string{"a.example", "b.example", "c.example", "d.example"} {
+		addDomain(t, rt, value)
+	}
+	_, err := rt.Graph.AddEdges(testContext, []Edge{
+		relatedEdge("domain:a.example", "domain:b.example"),
+		relatedEdge("domain:b.example", "domain:c.example"),
+	})
+	if err != nil {
+		t.Fatalf("add algorithm fixture edges: %v", err)
+	}
+
+	bfsResult, err := rt.Graph.Analyze(testContext, map[string]any{
+		"name": "bfs", "seed_id": "domain:a.example", "depth": 2, "direction": "out",
+	})
+	if err != nil {
+		t.Fatalf("bfs: %v", err)
+	}
+	bfs := bfsResult.(*GraphCursor)
+	defer bfs.Close()
+	if bfs.Kind() != CursorKindNodes {
+		t.Fatalf("bfs kind=%q", bfs.Kind())
+	}
+	bfsPage, err := bfs.Page(testContext, 2, 1)
+	if err != nil {
+		t.Fatalf("bfs page: %v", err)
+	}
+	if bfsPage.Total == nil || *bfsPage.Total != 2 || bfsPage.HasNext {
+		t.Fatalf("unexpected bfs page metadata: %+v", bfsPage)
+	}
+	bfsNodes, err := bfsPage.Nodes()
+	if err != nil || len(bfsNodes) != 2 || bfsNodes[0].ID != "domain:b.example" {
+		t.Fatalf("unexpected bfs rows: nodes=%v err=%v", bfsNodes, err)
+	}
+
+	componentsResult, err := rt.Graph.Analyze(testContext, map[string]any{"name": "weak_components"})
+	if err != nil {
+		t.Fatalf("weak components: %v", err)
+	}
+	components := componentsResult.(*GraphCursor)
+	defer components.Close()
+	componentPage, err := components.Page(testContext, 10, 1)
+	if err != nil {
+		t.Fatalf("component page: %v", err)
+	}
+	if components.Kind() != CursorKindComponents || len(componentPage.Items) != 4 {
+		t.Fatalf("unexpected component cursor: kind=%q page=%+v", components.Kind(), componentPage)
+	}
+	var componentSummary struct {
+		ComponentCount uint64 `json:"component_count"`
+		Projection     string `json:"projection"`
+	}
+	if err := json.Unmarshal(componentPage.Summary, &componentSummary); err != nil || componentSummary.ComponentCount != 2 || componentSummary.Projection != "undirected" {
+		t.Fatalf("component summary=%+v err=%v", componentSummary, err)
+	}
+
+	isDAGResult, err := rt.Graph.Analyze(testContext, map[string]any{"name": "is_dag"})
+	if err != nil || !isDAGResult.(bool) {
+		t.Fatalf("is dag=%v err=%v", isDAGResult, err)
+	}
+	orderResult, err := rt.Graph.Analyze(testContext, map[string]any{"name": "topological_order"})
+	if err != nil || orderResult == nil {
+		t.Fatalf("topological order result=%v err=%v", orderResult, err)
+	}
+	order := orderResult.(*GraphCursor)
+	defer order.Close()
+	orderPage, err := order.Page(testContext, 10, 1)
+	if err != nil {
+		t.Fatalf("topological page: %v", err)
+	}
+	if len(orderPage.Items) != 4 {
+		t.Fatalf("topological row count=%d", len(orderPage.Items))
+	}
+
+	coreResult, err := rt.Graph.Analyze(testContext, map[string]any{"name": "core_numbers"})
+	if err != nil {
+		t.Fatalf("core numbers: %v", err)
+	}
+	core := coreResult.(*GraphCursor)
+	defer core.Close()
+	corePage, err := core.Page(testContext, 10, 1)
+	if err != nil || len(corePage.Items) != 4 || core.Kind() != CursorKindNodeScores {
+		t.Fatalf("core page=%+v kind=%q err=%v", corePage, core.Kind(), err)
+	}
+	var coreRow struct {
+		NodeID string  `json:"node_id"`
+		Metric string  `json:"metric"`
+		Score  float64 `json:"score"`
+	}
+	if err := json.Unmarshal(corePage.Items[0], &coreRow); err != nil || coreRow.Metric != "core_number" || coreRow.NodeID == "" {
+		t.Fatalf("core row=%+v err=%v", coreRow, err)
+	}
+
+	communityResult, err := rt.Graph.Analyze(testContext, map[string]any{
+		"name": "leiden", "resolution": 1.0, "min_community_size": 1,
+	})
+	if err != nil {
+		t.Fatalf("analyze leiden: %v", err)
+	}
+	communities := communityResult.(*GraphCursor)
+	defer communities.Close()
+	if communities.Kind() != CursorKindCommunities {
+		t.Fatalf("unexpected community cursor kind: %q", communities.Kind())
+	}
+	assignmentPage, err := communities.Page(testContext, 2, 1)
+	if err != nil {
+		t.Fatalf("community assignment page: %v", err)
+	}
+	var communitySummary struct {
+		Algorithm        string `json:"algorithm"`
+		Projection       string `json:"projection"`
+		TotalCommunities uint64 `json:"total_communities"`
+	}
+	if err := json.Unmarshal(assignmentPage.Summary, &communitySummary); err != nil || communitySummary.Algorithm != "leiden" || communitySummary.Projection != "undirected" || communitySummary.TotalCommunities == 0 {
+		t.Fatalf("unexpected community summary: %+v err=%v", communitySummary, err)
+	}
+	if assignmentPage.Total == nil || *assignmentPage.Total != 4 || len(assignmentPage.Items) != 2 || !assignmentPage.HasNext {
+		t.Fatalf("unexpected assignment page: %+v", assignmentPage)
+	}
+	var assignment struct {
+		NodeID    string `json:"node_id"`
+		Community uint32 `json:"community"`
+	}
+	if err := json.Unmarshal(assignmentPage.Items[0], &assignment); err != nil || assignment.NodeID == "" {
+		t.Fatalf("community assignment=%+v err=%v", assignment, err)
 	}
 }
 
@@ -286,18 +438,30 @@ func TestGraphQueryOptionsCrossFFIBoundary(t *testing.T) {
 			t.Fatalf("query with options %+v: %v", options, err)
 		}
 		defer cursor.Close()
-		var ids []string
-		for cursor.Next(testContext) {
-			ids = append(ids, cursor.Node().ID)
+		limit := 1024
+		pageNumber := 1
+		if options.Collection.Limit != nil {
+			limit = *options.Collection.Limit
+			pageNumber = options.Collection.Page
 		}
-		if err := cursor.Err(); err != nil {
+		page, err := cursor.Page(testContext, limit, pageNumber)
+		if err != nil {
 			t.Fatalf("query cursor with options %+v: %v", options, err)
+		}
+		nodes, err := page.Nodes()
+		if err != nil {
+			t.Fatalf("decode query page: %v", err)
+		}
+		ids := make([]string, len(nodes))
+		for index, node := range nodes {
+			ids[index] = node.ID
 		}
 		return ids
 	}
 
-	if ids := collect(QueryOptions{Offset: 1}); !reflect.DeepEqual(ids, []string{internal.ID}) {
-		t.Fatalf("offset query returned %v", ids)
+	one := 1
+	if ids := collect(QueryOptions{Collection: CollectionOptions{Limit: &one, Page: 2}}); !reflect.DeepEqual(ids, []string{internal.ID}) {
+		t.Fatalf("second query page returned %v", ids)
 	}
 	if ids := collect(QueryOptions{IncludeMask: FlagInternal}); !reflect.DeepEqual(ids, []string{internal.ID}) {
 		t.Fatalf("include-mask query returned %v", ids)
@@ -311,11 +475,11 @@ func TestRepositoryRoundTrip(t *testing.T) {
 	rt := openRuntime(t)
 
 	addDomain(t, rt, "example.com")
-	commit, err := rt.Repo.Commit(testContext, "main", "initial", map[string]any{"origin": "test"})
+	commit, err := rt.Repo.Commit(testContext, "initial", "main", nil, map[string]any{"origin": "test"})
 	if err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	if commit.ID == "" || commit.Tree == "" {
+	if commit.ID == "" {
 		t.Fatalf("unexpected commit: %+v", commit)
 	}
 
@@ -323,51 +487,49 @@ func TestRepositoryRoundTrip(t *testing.T) {
 	if err != nil || head == nil || *head != commit.ID {
 		t.Fatalf("head: %v %v", head, err)
 	}
-	refs, err := rt.Repo.Refs(testContext)
-	if err != nil || len(refs) != 1 || refs[0].Name != "main" {
-		t.Fatalf("refs: %+v %v", refs, err)
+	resolved, err := rt.Repo.Resolve(testContext, "main")
+	if err != nil || resolved != commit.ID {
+		t.Fatalf("resolve: %s %v", resolved, err)
+	}
+	if _, err := rt.Repo.Branch(testContext, "initial", "main"); err != nil {
+		t.Fatalf("branch: %v", err)
 	}
 
 	addDomain(t, rt, "www.example.com")
-	if _, err := rt.Repo.Commit(testContext, "main", "second", nil); err != nil {
+	second, err := rt.Repo.Commit(testContext, "second", "main", &commit.ID, nil)
+	if err != nil {
 		t.Fatalf("second commit: %v", err)
 	}
-
-	snapshot, err := rt.Repo.DumpJSON(testContext)
-	if err != nil || len(snapshot) == 0 {
-		t.Fatalf("dump json: %v", err)
+	diff, err := rt.Repo.Diff(testContext, commit.ID, second.ID, nil)
+	if err != nil || len(diff.Added["domain"]) != 1 {
+		t.Fatalf("diff: %+v %v", diff, err)
 	}
-	fingerprint, err := rt.Repo.SnapshotFingerprint(testContext)
-	if err != nil || fingerprint == "" {
-		t.Fatalf("fingerprint: %v", err)
+	diffStat, err := rt.Repo.DiffStat(testContext, commit.ID, second.ID)
+	if err != nil || diffStat.AddedNodes != 1 {
+		t.Fatalf("diff stat: %+v %v", diffStat, err)
 	}
-
-	compact, err := rt.Repo.Dump(testContext, "zstd1")
-	if err != nil || len(compact) == 0 {
-		t.Fatalf("dump: %v", err)
+	log, err := rt.Repo.Log(testContext, "main", 10)
+	if err != nil || len(log) != 2 {
+		t.Fatalf("log: %+v %v", log, err)
 	}
-
-	rt2 := openRuntime(t)
-	consumed, err := rt2.Repo.LoadJSON(testContext, snapshot)
-	if err != nil {
-		t.Fatalf("load json: %v", err)
+	history, err := rt.Repo.History(testContext, "domain:www.example.com", "main", nil)
+	if err != nil || len(history.Entries) != 1 {
+		t.Fatalf("history: %+v %v", history, err)
 	}
-	if consumed != uint64(len(snapshot)) {
-		t.Fatalf("consumed %d != %d", consumed, len(snapshot))
+	if stat, err := rt.Repo.Stat(testContext, "main", 0, 0); err != nil || stat.Nodes["domain"] != 2 {
+		t.Fatalf("stat: %+v %v", stat, err)
 	}
-	if count, _ := rt2.Graph.NodeCount(testContext); count != 2 {
-		t.Fatalf("loaded node count: %d", count)
+	if _, err := rt.Repo.Delta(testContext, "main", nil, nil); err != nil {
+		t.Fatalf("delta: %v", err)
 	}
-	if fp, _ := rt2.Repo.SnapshotFingerprint(testContext); fp != fingerprint {
-		t.Fatalf("fingerprint mismatch after load: %s != %s", fp, fingerprint)
+	if _, err := rt.Repo.Checkout(testContext, "initial", true); err != nil {
+		t.Fatalf("checkout initial: %v", err)
 	}
-
-	rt3 := openRuntime(t)
-	if _, err := rt3.Repo.Load(testContext, compact, "zstd1"); err != nil {
-		t.Fatalf("load: %v", err)
+	if count, _ := rt.Graph.NodeCount(testContext); count != 1 {
+		t.Fatalf("initial node count: %d", count)
 	}
-	if count, _ := rt3.Graph.NodeCount(testContext); count != 2 {
-		t.Fatalf("loaded compact node count: %d", count)
+	if _, err := rt.Repo.Checkout(testContext, "main", true); err != nil {
+		t.Fatalf("checkout main: %v", err)
 	}
 }
 
@@ -398,15 +560,12 @@ func TestServicesAndCursorsHonorCanceledContext(t *testing.T) {
 		t.Fatalf("nodes: %v", err)
 	}
 	defer cursor.Close()
-	if cursor.Next(canceled) {
-		t.Fatal("canceled cursor unexpectedly yielded a node")
-	}
-	if !errors.Is(cursor.Err(), context.Canceled) {
-		t.Fatalf("expected canceled cursor error, got %v", cursor.Err())
+	if _, err := cursor.Page(canceled, 1, 1); !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected canceled cursor error, got %v", err)
 	}
 }
 
-func TestCanonicalV03FixtureMatchesGoContract(t *testing.T) {
+func TestConformanceFixtureMatchesGoContract(t *testing.T) {
 	var fixture struct {
 		Schema struct {
 			NodeType   string         `json:"node_type"`
@@ -422,7 +581,7 @@ func TestCanonicalV03FixtureMatchesGoContract(t *testing.T) {
 			EdgeCount uint64   `json:"edge_count"`
 		} `json:"expected"`
 	}
-	if err := json.Unmarshal(v03ConformanceFixture, &fixture); err != nil {
+	if err := json.Unmarshal(conformanceFixture, &fixture); err != nil {
 		t.Fatalf("decode fixture: %v", err)
 	}
 
@@ -456,12 +615,17 @@ func TestCanonicalV03FixtureMatchesGoContract(t *testing.T) {
 		t.Fatalf("query: %v", err)
 	}
 	defer cursor.Close()
-	var ids []string
-	for cursor.Next(testContext) {
-		ids = append(ids, cursor.Node().ID)
+	page, err := cursor.Page(testContext, 1024, 1)
+	if err != nil {
+		t.Fatalf("page query: %v", err)
 	}
-	if err := cursor.Err(); err != nil {
-		t.Fatalf("iterate query: %v", err)
+	nodes, err := page.Nodes()
+	if err != nil {
+		t.Fatalf("decode query: %v", err)
+	}
+	ids := make([]string, len(nodes))
+	for index, node := range nodes {
+		ids[index] = node.ID
 	}
 	if stringSliceMismatch(ids, fixture.Expected.NodeIDs) {
 		t.Fatalf("query IDs: got %v want %v", ids, fixture.Expected.NodeIDs)

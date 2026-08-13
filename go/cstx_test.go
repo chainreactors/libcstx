@@ -55,7 +55,7 @@ func TestEdgeFilterNullIDs(t *testing.T) {
 
 func TestCollectionOptionsNormalize(t *testing.T) {
 	options := CollectionOptions{}.normalize()
-	if options.PageSize != DefaultCursorPageSize || options.Order != OrderUnspecified {
+	if options.Page != 1 || options.Order != OrderUnspecified {
 		t.Fatalf("unexpected defaults: %+v", options)
 	}
 }
