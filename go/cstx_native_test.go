@@ -65,6 +65,151 @@ func addDomain(t *testing.T, rt *CSTX, value string) uint64 {
 	return affected
 }
 
+func TestRepositoryExternalPersistenceRoundTrip(t *testing.T) {
+	writer := openRuntime(t)
+	addDomain(t, writer, "persisted.example")
+
+	prepared, err := writer.Repo.Prepare(
+		testContext,
+		"external persistence",
+		"main",
+		nil,
+		map[string]any{"source": "go-test"},
+		nil,
+	)
+	if err != nil {
+		t.Fatalf("prepare: %v", err)
+	}
+	if prepared.Commit.ID == "" || prepared.IndexRoot == "" || len(prepared.Objects) == 0 {
+		t.Fatalf("incomplete prepared payload: %+v", prepared)
+	}
+
+	objects := make(map[string]RepositoryObject, len(prepared.Objects))
+	var commitObject, indexObject RepositoryObject
+	for _, object := range prepared.Objects {
+		stored := RepositoryObject{ID: object.ID, Envelope: append([]byte(nil), object.Envelope...)}
+		objects[object.ID] = stored
+		if object.Kind == "commit" && object.ID == prepared.Commit.ID {
+			commitObject = stored
+		}
+		if object.ID == prepared.IndexRoot {
+			indexObject = stored
+		}
+	}
+	if commitObject.ID == "" || indexObject.ID == "" {
+		t.Fatal("prepared payload does not contain commit and index-root envelopes")
+	}
+	if err := writer.Repo.Accept(testContext, prepared.Commit.ID); err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+
+	reader := openRuntime(t)
+	head := prepared.Commit.ID
+	if err := reader.Repo.Synchronize(testContext, RepositorySync{
+		Objects: []RepositoryObject{commitObject, indexObject},
+	}); err != nil {
+		t.Fatalf("synchronize commit objects: %v", err)
+	}
+	if err := reader.Repo.Synchronize(testContext, RepositorySync{
+		Refs:    []RepositoryRef{{Name: "main", Commit: &head}},
+		Indexes: []RepositoryIndex{{Commit: head, IndexRoot: prepared.IndexRoot}},
+	}); err != nil {
+		t.Fatalf("synchronize commit frontier: %v", err)
+	}
+
+	for {
+		missing, err := reader.Repo.MissingTree(testContext, head)
+		if err != nil {
+			t.Fatalf("plan missing tree: %v", err)
+		}
+		if len(missing) == 0 {
+			break
+		}
+		batch := make([]RepositoryObject, 0, len(missing))
+		for _, id := range missing {
+			object, ok := objects[id]
+			if !ok {
+				t.Fatalf("planner requested unknown object %s", id)
+			}
+			batch = append(batch, object)
+		}
+		if err := reader.Repo.Synchronize(testContext, RepositorySync{Objects: batch}); err != nil {
+			t.Fatalf("hydrate tree: %v", err)
+		}
+	}
+	if _, err := reader.Repo.Checkout(testContext, "main", true); err != nil {
+		t.Fatalf("checkout hydrated main: %v", err)
+	}
+	node, err := reader.Graph.Node(testContext, "domain:persisted.example")
+	if err != nil || node.Value != "persisted.example" {
+		t.Fatalf("restored node: %+v err=%v", node, err)
+	}
+	if err := reader.Repo.ReleaseTransientObjects(testContext); err != nil {
+		t.Fatalf("release transient objects: %v", err)
+	}
+}
+
+func TestGraphDeleteNodesCascadesAndCommits(t *testing.T) {
+	rt := openRuntime(t)
+	addDomain(t, rt, "delete-a.example")
+	addDomain(t, rt, "delete-b.example")
+	addDomain(t, rt, "keep.example")
+	edges := []Edge{
+		relatedEdge("domain:delete-a.example", "domain:delete-b.example"),
+		relatedEdge("domain:delete-b.example", "domain:keep.example"),
+	}
+	if _, err := rt.Graph.AddEdges(testContext, edges); err != nil {
+		t.Fatalf("add edges: %v", err)
+	}
+	base, err := rt.Repo.Commit(testContext, "base", "main", nil, nil)
+	if err != nil {
+		t.Fatalf("commit base: %v", err)
+	}
+	cursor, err := rt.Graph.Nodes(testContext, NodeFilter{}, CollectionOptions{})
+	if err != nil {
+		t.Fatalf("open cursor: %v", err)
+	}
+	defer cursor.Close()
+
+	affected, err := rt.Graph.DeleteNodes(testContext, []string{"domain:delete-b.example"})
+	if err != nil || affected != 3 {
+		t.Fatalf("delete node: affected=%d err=%v", affected, err)
+	}
+	if _, err := cursor.Page(testContext, 10, 1); !IsCode(err, CodeCursorInvalidated) {
+		t.Fatalf("expected cursor invalidation, got %v", err)
+	}
+	if count, _ := rt.Graph.NodeCount(testContext); count != 2 {
+		t.Fatalf("node count after delete=%d", count)
+	}
+	if count, _ := rt.Graph.EdgeCount(testContext); count != 0 {
+		t.Fatalf("edge count after cascade=%d", count)
+	}
+	change, err := rt.LastChange(testContext)
+	if err != nil || !reflect.DeepEqual(change.RemovedNodeIDs, []string{"domain:delete-b.example"}) || len(change.RemovedEdgeIDs) != 2 {
+		t.Fatalf("delete change=%+v err=%v", change, err)
+	}
+	head, err := rt.Repo.Commit(testContext, "delete", "main", &base.ID, nil)
+	if err != nil {
+		t.Fatalf("commit delete: %v", err)
+	}
+	diff, err := rt.Repo.Diff(testContext, base.ID, head.ID, DiffOptions{})
+	if err != nil || !reflect.DeepEqual(diff.Removed["domain"], []string{"domain:delete-b.example"}) || len(diff.Removed["edge:related"]) != 2 {
+		t.Fatalf("delete diff=%+v err=%v", diff, err)
+	}
+}
+
+func TestGraphDeleteIsAtomicOnMissingID(t *testing.T) {
+	rt := openRuntime(t)
+	addDomain(t, rt, "present.example")
+	affected, err := rt.Graph.DeleteNodes(testContext, []string{"domain:present.example", "domain:missing.example"})
+	if err == nil || affected != 0 {
+		t.Fatalf("expected atomic validation failure: affected=%d err=%v", affected, err)
+	}
+	if count, _ := rt.Graph.NodeCount(testContext); count != 1 {
+		t.Fatalf("failed delete changed graph: count=%d", count)
+	}
+}
+
 func TestSchemas(t *testing.T) {
 	rt := openRuntime(t)
 	valueField := "domain"
@@ -500,13 +645,13 @@ func TestRepositoryRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("second commit: %v", err)
 	}
-	diff, err := rt.Repo.Diff(testContext, commit.ID, second.ID, nil)
-	if err != nil || len(diff.Added["domain"]) != 1 {
+	diff, err := rt.Repo.Diff(testContext, commit.ID, second.ID, DiffOptions{})
+	if err != nil || len(diff.Added["domain"]) != 1 || diff.Stats.AddedNodes != 1 {
 		t.Fatalf("diff: %+v %v", diff, err)
 	}
-	diffStat, err := rt.Repo.DiffStat(testContext, commit.ID, second.ID)
-	if err != nil || diffStat.AddedNodes != 1 {
-		t.Fatalf("diff stat: %+v %v", diffStat, err)
+	counted, err := rt.Repo.Diff(testContext, commit.ID, second.ID, DiffOptions{Detail: DiffCounts})
+	if err != nil || counted.Stats.AddedNodes != 1 || len(counted.Added) != 0 {
+		t.Fatalf("counted diff: %+v %v", counted, err)
 	}
 	log, err := rt.Repo.Log(testContext, "main", 10)
 	if err != nil || len(log) != 2 {

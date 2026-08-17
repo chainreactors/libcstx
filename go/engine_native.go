@@ -13,6 +13,7 @@ import "C"
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"runtime"
 	"unsafe"
@@ -72,6 +73,30 @@ func (e *nativeEngine) graphSubgraph(_ context.Context, seedIDs []string, depth 
 	derived := &nativeEngine{handle: handle}
 	runtime.SetFinalizer(derived, (*nativeEngine).finalize)
 	return derived, nil
+}
+
+func (e *nativeEngine) graphDeleteNodes(_ context.Context, nodeIDs []string) (uint64, error) {
+	payload, err := marshalInput("graph.delete_nodes", nodeIDs)
+	if err != nil {
+		return 0, err
+	}
+	return countResult("graph.delete_nodes", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_delete_nodes(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+}
+
+func (e *nativeEngine) graphDeleteEdges(_ context.Context, edgeIDs []string) (uint64, error) {
+	payload, err := marshalInput("graph.delete_edges", edgeIDs)
+	if err != nil {
+		return 0, err
+	}
+	return countResult("graph.delete_edges", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_delete_edges(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
 }
 
 // --- C transport helpers -------------------------------------------------
@@ -365,6 +390,15 @@ func (e *nativeEngine) graphAddNodes(_ context.Context, nodes []Node) (uint64, e
 	})
 }
 
+func (e *nativeEngine) graphReplaceNodes(_ context.Context, nodes []Node) (uint64, error) {
+	payload := marshal(nodes)
+	return countResult("graph.replace_nodes", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_replace_nodes(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+}
+
 func (e *nativeEngine) graphAddEdges(_ context.Context, edges []Edge) (uint64, error) {
 	payload := marshal(edges)
 	return countResult("graph.add_edges", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
@@ -576,32 +610,257 @@ func (e *nativeEngine) repoCommit(
 	return commit, err
 }
 
-func (e *nativeEngine) repoDiff(_ context.Context, baseRef, headRef string, limit *int) (GraphDiff, error) {
+type preparedObjectWire struct {
+	ID       string `json:"id"`
+	Kind     string `json:"kind"`
+	Envelope string `json:"envelope"`
+}
+
+type preparedCommitWire struct {
+	Commit    Commit               `json:"commit"`
+	IndexRoot string               `json:"index_root"`
+	Objects   []preparedObjectWire `json:"objects"`
+}
+
+func (e *nativeEngine) repoPrepare(
+	_ context.Context,
+	message string,
+	refName string,
+	expectedHead *string,
+	metadata any,
+	timestamp *int64,
+) (PreparedCommit, error) {
+	metadataJSON, err := marshalInput("repo.prepare", metadata)
+	if err != nil {
+		return PreparedCommit{}, err
+	}
+	var wire preparedCommitWire
+	var nativeTimestamp C.int64_t
+	var hasTimestamp C.uint8_t
+	if timestamp != nil {
+		nativeTimestamp = C.int64_t(*timestamp)
+		hasTimestamp = 1
+	}
+	err = jsonResult("repo.prepare", &wire, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		var expected C.CstxSlice
+		if expectedHead != nil {
+			expected = stringSlice(*expectedHead)
+		}
+		rc := C.cstx_repo_prepare(e.handle, stringSlice(message), stringSlice(refName), expected, byteSlice(metadataJSON), nativeTimestamp, hasTimestamp, out, errBuf)
+		runtime.KeepAlive(message)
+		runtime.KeepAlive(refName)
+		runtime.KeepAlive(expectedHead)
+		runtime.KeepAlive(metadataJSON)
+		return rc
+	})
+	if err != nil {
+		return PreparedCommit{}, err
+	}
+	prepared := PreparedCommit{Commit: wire.Commit, IndexRoot: wire.IndexRoot, Objects: make([]PreparedObject, len(wire.Objects))}
+	for i, object := range wire.Objects {
+		envelope, err := hex.DecodeString(object.Envelope)
+		if err != nil {
+			return PreparedCommit{}, &Error{Code: CodeCorruptData, Operation: "repo.prepare", Message: "invalid object envelope: " + err.Error()}
+		}
+		prepared.Objects[i] = PreparedObject{ID: object.ID, Kind: object.Kind, Envelope: envelope}
+	}
+	return prepared, nil
+}
+
+func (e *nativeEngine) repoAccept(_ context.Context, commit string) error {
+	return statusCall("repo.accept", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_accept(e.handle, stringSlice(commit), errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoDiscard(_ context.Context) error {
+	return statusCall("repo.discard", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_repo_discard(e.handle, errBuf)
+	})
+}
+
+func (e *nativeEngine) repoSynchronize(_ context.Context, state RepositorySync) error {
+	type objectWire struct {
+		ID       string `json:"id"`
+		Envelope string `json:"envelope"`
+	}
+	type refWire struct {
+		Name   string  `json:"name"`
+		Commit *string `json:"commit"`
+	}
+	type indexWire struct {
+		Commit    string `json:"commit"`
+		IndexRoot string `json:"index_root"`
+	}
+	payload := struct {
+		Objects []objectWire `json:"objects"`
+		Refs    []refWire    `json:"refs"`
+		Indexes []indexWire  `json:"indexes"`
+	}{
+		Objects: make([]objectWire, len(state.Objects)),
+		Refs:    make([]refWire, len(state.Refs)),
+		Indexes: make([]indexWire, len(state.Indexes)),
+	}
+	for i, object := range state.Objects {
+		payload.Objects[i] = objectWire{ID: object.ID, Envelope: hex.EncodeToString(object.Envelope)}
+	}
+	for i, ref := range state.Refs {
+		payload.Refs[i] = refWire{Name: ref.Name, Commit: ref.Commit}
+	}
+	for i, index := range state.Indexes {
+		payload.Indexes[i] = indexWire{Commit: index.Commit, IndexRoot: index.IndexRoot}
+	}
+	data, err := marshalInput("repo.synchronize", payload)
+	if err != nil {
+		return err
+	}
+	return statusCall("repo.synchronize", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_synchronize(e.handle, byteSlice(data), errBuf)
+		runtime.KeepAlive(data)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoContains(_ context.Context, object string) (bool, error) {
+	return boolResult("repo.contains", func(out *C.uint8_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_contains(e.handle, stringSlice(object), out, errBuf)
+		runtime.KeepAlive(object)
+		return rc
+	})
+}
+
+func (e *nativeEngine) repoMissingTree(_ context.Context, commit string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_tree", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_tree(e.handle, stringSlice(commit), out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoObjectClosure(_ context.Context, commit string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.object_closure", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_object_closure(e.handle, stringSlice(commit), out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingPrepare(_ context.Context, commit string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_prepare", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_prepare(e.handle, stringSlice(commit), out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingHistory(_ context.Context, commit, entity string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_history", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_history(e.handle, stringSlice(commit), stringSlice(entity), out, errBuf)
+		runtime.KeepAlive(commit)
+		runtime.KeepAlive(entity)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingStat(_ context.Context, commit string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_stat", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_stat(e.handle, stringSlice(commit), out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingCommits(_ context.Context, commit string, limit int) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_commits", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_commits(e.handle, stringSlice(commit), C.size_t(limit), out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingDiff(_ context.Context, base, head string, detail DiffDetail) ([]string, error) {
+	var ids []string
+	nativeDetail := string(detail)
+	err := jsonResult("repo.missing_diff", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_diff(e.handle, stringSlice(base), stringSlice(head), stringSlice(nativeDetail), out, errBuf)
+		runtime.KeepAlive(base)
+		runtime.KeepAlive(head)
+		runtime.KeepAlive(nativeDetail)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoMissingDelta(_ context.Context, commit string, start, end *int64) ([]string, error) {
+	var ids []string
+	var nativeStart, nativeEnd C.int64_t
+	var hasStart, hasEnd C.uint8_t
+	if start != nil {
+		nativeStart = C.int64_t(*start)
+		hasStart = 1
+	}
+	if end != nil {
+		nativeEnd = C.int64_t(*end)
+		hasEnd = 1
+	}
+	err := jsonResult("repo.missing_delta", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_delta(e.handle, stringSlice(commit), nativeStart, hasStart, nativeEnd, hasEnd, out, errBuf)
+		runtime.KeepAlive(commit)
+		return rc
+	})
+	return ids, err
+}
+
+// repoMissingMerge takes an empty target to mean "merge into the current head",
+// which optionalStringSlice turns into the runtime's None.
+func (e *nativeEngine) repoMissingMerge(_ context.Context, source, target string) ([]string, error) {
+	var ids []string
+	err := jsonResult("repo.missing_merge", &ids, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_missing_merge(e.handle, stringSlice(source), optionalStringSlice(target), out, errBuf)
+		runtime.KeepAlive(source)
+		runtime.KeepAlive(target)
+		return rc
+	})
+	return ids, err
+}
+
+func (e *nativeEngine) repoReleaseTransientObjects(_ context.Context) error {
+	return statusCall("repo.release_transient_objects", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_repo_release_transient_objects(e.handle, errBuf)
+	})
+}
+
+func (e *nativeEngine) repoDiff(_ context.Context, baseRef, headRef string, options DiffOptions) (GraphDiff, error) {
 	var diff GraphDiff
 	var nativeLimit C.size_t
 	var hasLimit C.uint8_t
-	if limit != nil {
-		nativeLimit = C.size_t(*limit)
+	if options.Limit != nil {
+		nativeLimit = C.size_t(*options.Limit)
 		hasLimit = 1
 	}
+	detail := string(options.detail())
 	err := jsonResult("repo.diff", &diff, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_diff(e.handle, stringSlice(baseRef), stringSlice(headRef), nativeLimit, hasLimit, out, errBuf)
+		rc := C.cstx_repo_diff(e.handle, stringSlice(baseRef), stringSlice(headRef), nativeLimit, hasLimit, stringSlice(detail), out, errBuf)
 		runtime.KeepAlive(baseRef)
 		runtime.KeepAlive(headRef)
+		runtime.KeepAlive(detail)
 		return rc
 	})
 	return diff, err
-}
-
-func (e *nativeEngine) repoDiffStat(_ context.Context, baseRef, headRef string) (Delta, error) {
-	var value Delta
-	err := jsonResult("repo.diff_stat", &value, func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_repo_diff_stat(e.handle, stringSlice(baseRef), stringSlice(headRef), out, errBuf)
-		runtime.KeepAlive(baseRef)
-		runtime.KeepAlive(headRef)
-		return rc
-	})
-	return value, err
 }
 
 func (e *nativeEngine) repoHead(_ context.Context, refName string) (*string, error) {

@@ -79,8 +79,7 @@ export class Repository {
     checkout(revision?: string | null, force?: boolean | null): any;
     commit(message: string, ref_name?: string | null, expected_head?: string | null, metadata?: any | null, timestamp?: bigint | null): any;
     delta(revision?: string | null, start_timestamp?: bigint | null, end_timestamp?: bigint | null): any;
-    diff(base: string, head: string, limit?: number | null): any;
-    diffStat(base: string, head: string): any;
+    diff(base: string, head: string, limit?: number | null, detail?: string | null): any;
     head(ref_name?: string | null): any;
     history(entity_id: string, revision?: string | null, limit?: number | null): any;
     log(revision?: string | null, limit?: number | null): any;
@@ -172,8 +171,7 @@ export interface InitOutput {
     readonly repository_resolve: (a: number, b: number, c: number, d: number) => void;
     readonly repository_checkout: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly repository_commit: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: bigint) => void;
-    readonly repository_diff: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
-    readonly repository_diffStat: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
+    readonly repository_diff: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number) => void;
     readonly repository_head: (a: number, b: number, c: number, d: number) => void;
     readonly repository_branch: (a: number, b: number, c: number, d: number, e: number, f: number) => void;
     readonly repository_history: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
@@ -196,8 +194,8 @@ export interface InitOutput {
     readonly rust_zstd_wasm_shim_memcpy: (a: number, b: number, c: number) => number;
     readonly rust_zstd_wasm_shim_memmove: (a: number, b: number, c: number) => number;
     readonly rust_zstd_wasm_shim_memset: (a: number, b: number, c: number) => number;
-    readonly __wbg_schemas_free: (a: number, b: number) => void;
     readonly __wbg_repository_free: (a: number, b: number) => void;
+    readonly __wbg_schemas_free: (a: number, b: number) => void;
     readonly cstx_schemas: (a: number) => number;
     readonly cstx_repository: (a: number) => number;
     readonly __wbindgen_export: (a: number, b: number) => number;

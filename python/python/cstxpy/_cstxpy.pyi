@@ -232,8 +232,20 @@ class CSTXGraph:
         """Atomically mutate native dictionaries without a JSON round trip."""
         ...
 
+    def replace_nodes(self, nodes: list[dict[str, Any]]) -> int:
+        """Atomically overwrite native dictionaries instead of merging them."""
+        ...
+
     def add_edges(self, edges: list[dict[str, Any]]) -> int:
         """Atomically mutate native relationship dictionaries."""
+        ...
+
+    def delete_nodes(self, node_ids: list[str]) -> int:
+        """Atomically remove nodes and their incident relationships."""
+        ...
+
+    def delete_edges(self, edge_ids: list[str]) -> int:
+        """Atomically remove relationships by stable CSTX ID."""
         ...
 
     def node(self, node_id: str) -> dict[str, Any]:
@@ -432,6 +444,10 @@ class Repository:
         """Return graph-tree objects missing from the native object set."""
         ...
 
+    def _object_closure(self, commit: bytes) -> list[bytes]:
+        """Return every object this commit and its ancestry are built from."""
+        ...
+
     def _missing_stat(self, commit: bytes) -> list[bytes]:
         """Return the graph root needed for persisted statistics."""
         ...
@@ -442,10 +458,6 @@ class Repository:
         target: bytes | None = None,
     ) -> list[bytes]:
         """Return the commit frontier or graph objects needed by merge."""
-        ...
-
-    def _missing_diff_stat(self, base: bytes, head: bytes) -> list[bytes]:
-        """Return index objects needed for an exact count-only diff."""
         ...
 
     def _missing_delta(
@@ -473,9 +485,13 @@ class Repository:
         self,
         base: bytes,
         head: bytes,
-        limit: int | None = None,
+        detail: str = "entities",
     ) -> list[bytes]:
-        """Return index or graph objects needed for a revision diff."""
+        """Return index or graph objects needed for a revision diff.
+
+        A limit never narrows the plan, so the request carries only the detail
+        level: ``"counts"`` skips the pages a page summary already answers for.
+        """
         ...
 
     def _commits(self, commit: bytes, limit: int) -> list[bytes]:
@@ -514,12 +530,13 @@ class Repository:
         base: str,
         head: str,
         limit: int | None = None,
+        detail: str = "entities",
     ) -> dict[str, Any]:
-        """Compare two revisions with an optional result limit."""
-        ...
+        """Compare two revisions.
 
-    def diff_stat(self, base: str, head: str) -> dict[str, Any]:
-        """Count an exact diff without materializing entity IDs."""
+        ``limit`` bounds the reported entity IDs; ``detail="counts"`` drops them
+        entirely. ``stats`` counts the whole range either way.
+        """
         ...
 
     def log(
