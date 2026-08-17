@@ -1100,40 +1100,19 @@ export class Repository {
      * @param {string} base
      * @param {string} head
      * @param {number | null} [limit]
+     * @param {string | null} [detail]
      * @returns {any}
      */
-    diff(base, head, limit) {
+    diff(base, head, limit, detail) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             const ptr0 = passStringToWasm0(base, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len0 = WASM_VECTOR_LEN;
             const ptr1 = passStringToWasm0(head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
             const len1 = WASM_VECTOR_LEN;
-            wasm.repository_diff(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return takeObject(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * @param {string} base
-     * @param {string} head
-     * @returns {any}
-     */
-    diffStat(base, head) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(base, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(head, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len1 = WASM_VECTOR_LEN;
-            wasm.repository_diffStat(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1);
+            var ptr2 = isLikeNone(detail) ? 0 : passStringToWasm0(detail, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len2 = WASM_VECTOR_LEN;
+            wasm.repository_diff(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, isLikeNone(limit) ? Number.MAX_SAFE_INTEGER : (limit) >>> 0, ptr2, len2);
             var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
             var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);

@@ -16,12 +16,44 @@ func (g *Graph) AddNodes(ctx context.Context, nodes []Node) (uint64, error) {
 	return g.eng.graphAddNodes(ctx, nodes)
 }
 
+// ReplaceNodes atomically writes each node as its current state and returns the
+// number of elements actually changed.
+//
+// AddNodes merges: fields fill in, sources accumulate, and two different values
+// under one extras key are kept as both. That is what aggregating sightings of
+// one entity needs. ReplaceNodes is for records that have a current value — an
+// oracle that moved from "future" to "intent" has one status — where merging
+// would silently keep the old value alongside the new one. Restating an
+// unchanged record still reports zero and writes no history.
+func (g *Graph) ReplaceNodes(ctx context.Context, nodes []Node) (uint64, error) {
+	if err := contextError(ctx); err != nil {
+		return 0, err
+	}
+	return g.eng.graphReplaceNodes(ctx, nodes)
+}
+
 // AddEdges atomically adds or merges relationships.
 func (g *Graph) AddEdges(ctx context.Context, edges []Edge) (uint64, error) {
 	if err := contextError(ctx); err != nil {
 		return 0, err
 	}
 	return g.eng.graphAddEdges(ctx, edges)
+}
+
+// DeleteNodes atomically removes nodes and all incident relationships.
+func (g *Graph) DeleteNodes(ctx context.Context, nodeIDs []string) (uint64, error) {
+	if err := contextError(ctx); err != nil {
+		return 0, err
+	}
+	return g.eng.graphDeleteNodes(ctx, nodeIDs)
+}
+
+// DeleteEdges atomically removes relationships by stable CSTX ID.
+func (g *Graph) DeleteEdges(ctx context.Context, edgeIDs []string) (uint64, error) {
+	if err := contextError(ctx); err != nil {
+		return 0, err
+	}
+	return g.eng.graphDeleteEdges(ctx, edgeIDs)
 }
 
 // Ingest feeds one linked native-plugin payload into the shared graph.

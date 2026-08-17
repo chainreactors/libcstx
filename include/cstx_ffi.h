@@ -131,10 +131,33 @@ CstxStatusCode cstx_graph_add_nodes(struct CstxHandle *handle,
                                     uint64_t *affected,
                                     struct CstxBuffer *error);
 
+/**
+ * Write each node as its current state, replacing the stored record.
+ *
+ * The merge path (`cstx_graph_add_nodes`) owns bulk ingest and keeps its JSON
+ * fast path. A replace batch is a caller restating records it already holds —
+ * a task's oracles, a document's current revision — so it goes through the
+ * shared `Value` path rather than earning a second parser.
+ */
+CstxStatusCode cstx_graph_replace_nodes(struct CstxHandle *handle,
+                                        struct CstxSlice data,
+                                        uint64_t *affected,
+                                        struct CstxBuffer *error);
+
 CstxStatusCode cstx_graph_add_edges(struct CstxHandle *handle,
                                     struct CstxSlice data,
                                     uint64_t *affected,
                                     struct CstxBuffer *error);
+
+CstxStatusCode cstx_graph_delete_nodes(struct CstxHandle *handle,
+                                       struct CstxSlice node_ids_json,
+                                       uint64_t *output,
+                                       struct CstxBuffer *error);
+
+CstxStatusCode cstx_graph_delete_edges(struct CstxHandle *handle,
+                                       struct CstxSlice edge_ids_json,
+                                       uint64_t *output,
+                                       struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_ingest(struct CstxHandle *handle,
                                  struct CstxSlice source,
@@ -362,19 +385,96 @@ CstxStatusCode cstx_repo_commit(struct CstxHandle *handle,
                                 struct CstxBuffer *output,
                                 struct CstxBuffer *error);
 
+CstxStatusCode cstx_repo_prepare(struct CstxHandle *handle,
+                                 struct CstxSlice message,
+                                 struct CstxSlice ref_name,
+                                 struct CstxSlice expected_head,
+                                 struct CstxSlice metadata_json,
+                                 int64_t timestamp,
+                                 uint8_t has_timestamp,
+                                 struct CstxBuffer *output,
+                                 struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_accept(struct CstxHandle *handle,
+                                struct CstxSlice commit,
+                                struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_discard(struct CstxHandle *handle, struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_synchronize(struct CstxHandle *handle,
+                                     struct CstxSlice payload_json,
+                                     struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_contains(struct CstxHandle *handle,
+                                  struct CstxSlice object,
+                                  uint8_t *output,
+                                  struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_tree(struct CstxHandle *handle,
+                                      struct CstxSlice commit,
+                                      struct CstxBuffer *output,
+                                      struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_object_closure(struct CstxHandle *handle,
+                                        struct CstxSlice commit,
+                                        struct CstxBuffer *output,
+                                        struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_prepare(struct CstxHandle *handle,
+                                         struct CstxSlice commit,
+                                         struct CstxBuffer *output,
+                                         struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_history(struct CstxHandle *handle,
+                                         struct CstxSlice commit,
+                                         struct CstxSlice entity_id,
+                                         struct CstxBuffer *output,
+                                         struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_stat(struct CstxHandle *handle,
+                                      struct CstxSlice commit,
+                                      struct CstxBuffer *output,
+                                      struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_commits(struct CstxHandle *handle,
+                                         struct CstxSlice commit,
+                                         size_t limit,
+                                         struct CstxBuffer *output,
+                                         struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_diff(struct CstxHandle *handle,
+                                      struct CstxSlice base,
+                                      struct CstxSlice head,
+                                      struct CstxSlice detail,
+                                      struct CstxBuffer *output,
+                                      struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_delta(struct CstxHandle *handle,
+                                       struct CstxSlice commit,
+                                       int64_t start_timestamp,
+                                       uint8_t has_start,
+                                       int64_t end_timestamp,
+                                       uint8_t has_end,
+                                       struct CstxBuffer *output,
+                                       struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_missing_merge(struct CstxHandle *handle,
+                                       struct CstxSlice source,
+                                       struct CstxSlice target,
+                                       struct CstxBuffer *output,
+                                       struct CstxBuffer *error);
+
+CstxStatusCode cstx_repo_release_transient_objects(struct CstxHandle *handle,
+                                                   struct CstxBuffer *error);
+
 CstxStatusCode cstx_repo_diff(struct CstxHandle *handle,
                               struct CstxSlice base_ref,
                               struct CstxSlice head_ref,
                               size_t limit,
                               uint8_t has_limit,
+                              struct CstxSlice detail,
                               struct CstxBuffer *output,
                               struct CstxBuffer *error);
-
-CstxStatusCode cstx_repo_diff_stat(struct CstxHandle *handle,
-                                   struct CstxSlice base_ref,
-                                   struct CstxSlice head_ref,
-                                   struct CstxBuffer *output,
-                                   struct CstxBuffer *error);
 
 CstxStatusCode cstx_repo_head(struct CstxHandle *handle,
                               struct CstxSlice ref_name,

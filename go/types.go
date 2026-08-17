@@ -128,6 +128,50 @@ type Commit struct {
 	CreatedAt int64    `json:"created_at"`
 }
 
+// PreparedObject is one immutable CSTX object ready for external persistence.
+// Envelope is the canonical encoded object and must be stored without changes.
+type PreparedObject struct {
+	ID       string
+	Kind     string
+	Envelope []byte
+}
+
+// PreparedCommit is the complete immutable portion of one external publish
+// transaction. The ref must only be advanced after all Objects and IndexRoot
+// are durably stored.
+type PreparedCommit struct {
+	Commit    Commit
+	IndexRoot string
+	Objects   []PreparedObject
+}
+
+// RepositoryObject hydrates one immutable object into a CSTX computation
+// session. The ID is verified against Envelope by the runtime.
+type RepositoryObject struct {
+	ID       string
+	Envelope []byte
+}
+
+// RepositoryRef synchronizes one mutable named reference. A nil Commit deletes
+// the reference from the computation session.
+type RepositoryRef struct {
+	Name   string
+	Commit *string
+}
+
+// RepositoryIndex binds a commit to its immutable history index root.
+type RepositoryIndex struct {
+	Commit    string
+	IndexRoot string
+}
+
+// RepositorySync is one batch of externally persisted repository state.
+type RepositorySync struct {
+	Objects []RepositoryObject
+	Refs    []RepositoryRef
+	Indexes []RepositoryIndex
+}
+
 // GraphDiff groups added, removed, and modified element IDs by element type.
 type GraphDiff struct {
 	Added    map[string][]string `json:"added"`
@@ -137,6 +181,36 @@ type GraphDiff struct {
 	// change. An empty group is otherwise ambiguous between "nothing of that
 	// type changed" and "the limit ran out first".
 	Truncated bool `json:"truncated"`
+	// Stats counts the whole compared range, whatever a limit left out of the
+	// maps above.
+	Stats Delta `json:"stats"`
+}
+
+// DiffDetail selects how much of a diff the caller needs back.
+type DiffDetail string
+
+const (
+	// DiffEntities lists every changed entity, and counts them.
+	DiffEntities DiffDetail = "entities"
+	// DiffCounts returns counts alone, which page summaries can often answer
+	// without reading the pages themselves.
+	DiffCounts DiffDetail = "counts"
+)
+
+// DiffOptions is one diff request. The zero value lists entities without a
+// limit.
+type DiffOptions struct {
+	// Limit caps reported entity IDs. Counts stay exact whatever it drops.
+	Limit *int
+	// Detail selects the entity lists or counts alone.
+	Detail DiffDetail
+}
+
+func (o DiffOptions) detail() DiffDetail {
+	if o.Detail == "" {
+		return DiffEntities
+	}
+	return o.Detail
 }
 
 // JoinRuleSpec is the portable native-linker rule shared by all bindings.

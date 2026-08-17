@@ -25,7 +25,10 @@ type engine interface {
 	schemaAnchorConcepts(context.Context) ([]AnchorConcept, error)
 
 	graphAddNodes(context.Context, []Node) (uint64, error)
+	graphReplaceNodes(context.Context, []Node) (uint64, error)
 	graphAddEdges(context.Context, []Edge) (uint64, error)
+	graphDeleteNodes(context.Context, []string) (uint64, error)
+	graphDeleteEdges(context.Context, []string) (uint64, error)
 	graphIngest(context.Context, string, []byte) (uint64, error)
 	graphNode(context.Context, string) (Node, error)
 	graphContains(context.Context, string) (bool, error)
@@ -43,8 +46,22 @@ type engine interface {
 	repoHead(context.Context, string) (*string, error)
 	repoCheckout(context.Context, string, bool) (Commit, error)
 	repoCommit(context.Context, string, string, *string, any) (Commit, error)
-	repoDiff(context.Context, string, string, *int) (GraphDiff, error)
-	repoDiffStat(context.Context, string, string) (Delta, error)
+	repoPrepare(context.Context, string, string, *string, any, *int64) (PreparedCommit, error)
+	repoAccept(context.Context, string) error
+	repoDiscard(context.Context) error
+	repoSynchronize(context.Context, RepositorySync) error
+	repoContains(context.Context, string) (bool, error)
+	repoMissingTree(context.Context, string) ([]string, error)
+	repoObjectClosure(context.Context, string) ([]string, error)
+	repoMissingPrepare(context.Context, string) ([]string, error)
+	repoMissingHistory(context.Context, string, string) ([]string, error)
+	repoMissingStat(context.Context, string) ([]string, error)
+	repoMissingCommits(context.Context, string, int) ([]string, error)
+	repoMissingDiff(context.Context, string, string, DiffDetail) ([]string, error)
+	repoMissingDelta(context.Context, string, *int64, *int64) ([]string, error)
+	repoMissingMerge(context.Context, string, string) ([]string, error)
+	repoReleaseTransientObjects(context.Context) error
+	repoDiff(context.Context, string, string, DiffOptions) (GraphDiff, error)
 	repoLog(context.Context, string, int) ([]map[string]any, error)
 	repoHistory(context.Context, string, string, *int) ([]map[string]any, error)
 	repoBranch(context.Context, string, string) (string, error)
