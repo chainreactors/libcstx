@@ -326,6 +326,9 @@ func ParseSCONode(data []byte) (SCONode, error) {
 		err := json.Unmarshal(data, &v)
 		return &v, err
 	default:
+		if parser := registeredSCOParser(h.Type); parser != nil {
+			return parser(data)
+		}
 		return nil, nil
 	}
 }
