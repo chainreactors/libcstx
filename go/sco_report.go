@@ -23,7 +23,11 @@ type ReportNode struct {
 	EvidenceClaims  map[string]string `json:"evidence_claims,omitempty"`
 	ObservationIDs  []string          `json:"observation_ids,omitempty"`
 	AssetIDs        []string          `json:"asset_ids,omitempty"`
-	Provenance      map[string]any    `json:"provenance,omitempty"`
+	// VulnerabilityIDs are the report's semantic membership. The graph stores
+	// the corresponding includes edges; keeping the IDs on the typed SCO makes
+	// the extension self-describing without reintroducing an Artifact entity.
+	VulnerabilityIDs []string       `json:"vulnerability_ids,omitempty"`
+	Provenance       map[string]any `json:"provenance,omitempty"`
 }
 
 func parseReportNode(data []byte) (SCONode, error) {
