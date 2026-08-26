@@ -137,6 +137,16 @@ type SarifVulnNode struct {
 	Evidence      string   `json:"evidence,omitempty"`
 }
 
+// ReportNode is a domain-neutral report SCO used by consumers that publish
+// evidence-backed summaries alongside graph findings.
+type ReportNode struct {
+	nodeHeader
+	Value    string `json:"value,omitempty"`
+	Title    string `json:"title,omitempty"`
+	Summary  string `json:"summary,omitempty"`
+	Markdown string `json:"markdown,omitempty"`
+}
+
 type CertificateNode struct {
 	nodeHeader
 	Fingerprint string   `json:"fingerprint"`
@@ -248,6 +258,9 @@ func (h nodeHeader) CstxID() string   { return h.ID }
 
 // ParseSCONode unmarshals a JSON node into the correct typed struct.
 func ParseSCONode(data []byte) (SCONode, error) {
+	if node, registered, err := parseRegisteredSCONode(data); registered || err != nil {
+		return node, err
+	}
 	var h nodeHeader
 	if err := json.Unmarshal(data, &h); err != nil {
 		return nil, err
@@ -291,6 +304,10 @@ func ParseSCONode(data []byte) (SCONode, error) {
 		return &v, err
 	case "sarif_vuln":
 		var v SarifVulnNode
+		err := json.Unmarshal(data, &v)
+		return &v, err
+	case "report":
+		var v ReportNode
 		err := json.Unmarshal(data, &v)
 		return &v, err
 	case "certificate":
