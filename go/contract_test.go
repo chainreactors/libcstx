@@ -1,63 +1,46 @@
 package cstx
 
 import (
-	"encoding/json"
-	"reflect"
-	"sort"
-	"strings"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"path/filepath"
 	"testing"
 )
 
-// The transport contract is owned by cstx.core.elements (Node/Edge pydantic
-// models) and mirrored by codegen/generate_transport_ts.py. These tests pin
-// the Go structs to the same field sets so the three languages cannot drift.
-func jsonFieldNames(t *testing.T, value any) []string {
-	t.Helper()
-	typ := reflect.TypeOf(value)
-	var names []string
-	for i := 0; i < typ.NumField(); i++ {
-		tag := typ.Field(i).Tag.Get("json")
-		if tag == "" || tag == "-" {
+// This gate prevents the SDK from quietly growing another public graph or
+// repository model beside the generated protobuf package.
+func TestNoDuplicatedPublicModelTypes(t *testing.T) {
+	banned := map[string]bool{
+		"Node": true, "Edge": true, "Relationship": true, "GraphStats": true,
+		"Delta": true, "ChangeSet": true, "Commit": true, "GraphDiff": true,
+		"History": true, "HistoryEntry": true, "RepositorySync": true,
+		"MissingPlan": true, "NodeFilter": true, "EdgeFilter": true,
+		"RelationshipFilter": true, "QueryOptions": true, "Config": true,
+	}
+	files, err := filepath.Glob("*.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if filepath.Ext(file) != ".go" || filepath.Base(file) == "contract_test.go" {
 			continue
 		}
-		names = append(names, strings.Split(tag, ",")[0])
-	}
-	sort.Strings(names)
-	return names
-}
-
-func TestNodeMatchesTransportContract(t *testing.T) {
-	got := jsonFieldNames(t, Node{})
-	want := []string{"extras", "id", "model", "sources", "type", "value"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("node fields drifted from transport contract: got %v want %v", got, want)
-	}
-}
-
-func TestEdgeMatchesTransportContract(t *testing.T) {
-	got := jsonFieldNames(t, Edge{})
-	want := []string{"attrs", "id", "relation_type", "source_id", "sources", "target_id"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("edge fields drifted from transport contract: got %v want %v", got, want)
-	}
-}
-
-func TestQueryOptionsMatchesRustTransportContract(t *testing.T) {
-	got := jsonFieldNames(t, QueryOptions{})
-	want := []string{"collection", "exclude_mask", "include_mask"}
-	if !reflect.DeepEqual(got, want) {
-		t.Fatalf("query option fields drifted from Rust contract: got %v want %v", got, want)
-	}
-
-	payload, err := json.Marshal(QueryOptions{ExcludeMask: 5, IncludeMask: 8})
-	if err != nil {
-		t.Fatalf("marshal query options: %v", err)
-	}
-	var wire map[string]any
-	if err := json.Unmarshal(payload, &wire); err != nil {
-		t.Fatalf("unmarshal query options: %v", err)
-	}
-	if wire["exclude_mask"] != float64(5) || wire["include_mask"] != float64(8) {
-		t.Fatalf("query option values drifted from Rust contract: %s", payload)
+		parsed, err := parser.ParseFile(token.NewFileSet(), file, nil, 0)
+		if err != nil {
+			t.Fatalf("parse %s: %v", file, err)
+		}
+		for _, declaration := range parsed.Decls {
+			general, ok := declaration.(*ast.GenDecl)
+			if !ok || general.Tok != token.TYPE {
+				continue
+			}
+			for _, spec := range general.Specs {
+				name := spec.(*ast.TypeSpec).Name.Name
+				if banned[name] {
+					t.Fatalf("%s declares duplicated public model %s; use cstxproto.%s", file, name, name)
+				}
+			}
+		}
 	}
 }

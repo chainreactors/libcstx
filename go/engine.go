@@ -1,6 +1,11 @@
 package cstx
 
-import "context"
+import (
+	"context"
+
+	"github.com/chainreactors/libcstx/go/proto/cstxproto"
+	"google.golang.org/protobuf/types/known/structpb"
+)
 
 // engine is the internal boundary between the typed facade and the transport
 // implementation. The native build implements it over the cstx-ffi C ABI;
@@ -8,69 +13,59 @@ import "context"
 type engine interface {
 	close() error
 
-	lastChange(context.Context) (ChangeSet, error)
+	lastChange(context.Context) (*cstxproto.GraphChangeSet, error)
 
-	schemaImport(context.Context, SchemaContract) error
-	schemaExport(context.Context) (SchemaContract, error)
-	schemaRegister(context.Context, string, map[string]any, string) error
-	schemaRegisterJoinRule(context.Context, JoinRuleSpec) error
-	schemaContains(context.Context, string) (bool, error)
-	schemaGet(context.Context, string) (map[string]any, error)
-	schemaList(context.Context) ([]map[string]any, error)
-	schemaLoadPlugin(context.Context, string) error
-	schemaLoadAllPlugins(context.Context) error
-	schemaAvailablePlugins(context.Context) ([]string, error)
-	schemaPluginArtifacts(context.Context, string) ([]string, error)
-	schemaHasNativeArtifact(context.Context, string) (bool, error)
-	schemaAnchorConcepts(context.Context) ([]AnchorConcept, error)
+	extensionRegister(context.Context, *cstxproto.ExtensionContract) error
+	extensionExportContract(context.Context) (cstxproto.ExtensionContract, error)
+	extensionEnable(context.Context, string) error
+	extensionList(context.Context) (*cstxproto.ExtensionCatalog, error)
+	extensionInfo(context.Context, string) (*cstxproto.ExtensionInfo, error)
+	extensionContains(context.Context, string) (bool, error)
+	extensionSchema(context.Context, string) (cstxproto.NodeType, error)
+	extensionSchemas(context.Context) (cstxproto.NodeTypeCatalog, error)
+	extensionHasNativeArtifact(context.Context, string) (bool, error)
+	extensionAnchorConcepts(context.Context) (cstxproto.AnchorConceptCatalog, error)
 
-	graphAddNodes(context.Context, []Node) (uint64, error)
-	graphReplaceNodes(context.Context, []Node) (uint64, error)
-	graphAddEdges(context.Context, []Edge) (uint64, error)
+	graphAddNodes(context.Context, []*cstxproto.Node) (uint64, error)
+	graphReplaceNodes(context.Context, []*cstxproto.Node) (uint64, error)
+	graphAddRelationships(context.Context, []*cstxproto.Relationship) (uint64, error)
 	graphDeleteNodes(context.Context, []string) (uint64, error)
-	graphDeleteEdges(context.Context, []string) (uint64, error)
-	graphIngest(context.Context, string, []byte) (uint64, error)
-	graphNode(context.Context, string) (Node, error)
+	graphDeleteRelationships(context.Context, []string) (uint64, error)
+	graphIngest(context.Context, string, string, []byte) (cstxproto.GraphIngestResult, error)
+	graphNode(context.Context, string) (*cstxproto.Node, error)
+	graphRelationship(context.Context, string) (*cstxproto.Relationship, error)
 	graphContains(context.Context, string) (bool, error)
 	graphNodeCount(context.Context) (uint64, error)
-	graphEdgeCount(context.Context) (uint64, error)
-	graphStats(context.Context) (GraphStats, error)
-	graphNodes(context.Context, NodeFilter, CollectionOptions) (graphCursor, error)
-	graphEdges(context.Context, EdgeFilter, CollectionOptions) (graphCursor, error)
-	graphNeighbors(context.Context, string, string, CollectionOptions) (graphCursor, error)
-	graphQuery(context.Context, string, QueryOptions) (graphCursor, error)
-	graphAnalyze(context.Context, any, *string) (uint8, bool, graphCursor, error)
+	graphRelationshipCount(context.Context) (uint64, error)
+	graphStats(context.Context) (*cstxproto.GraphStats, error)
+	graphNodes(context.Context, *cstxproto.NodeQuery) (graphCursor, error)
+	graphRelationships(context.Context, *cstxproto.RelationshipQuery) (graphCursor, error)
+	graphNeighbors(context.Context, *cstxproto.NeighborQuery) (graphCursor, error)
+	graphQuery(context.Context, *cstxproto.GraphQuery) (graphCursor, error)
+	graphAnalyze(context.Context, *cstxproto.Algorithm, *string) (uint8, bool, graphCursor, error)
 	graphSubgraph(context.Context, []string, uint32) (engine, error)
 
 	repoResolve(context.Context, string) (string, error)
 	repoHead(context.Context, string) (*string, error)
-	repoCheckout(context.Context, string, bool) (Commit, error)
-	repoCommit(context.Context, string, string, *string, any) (Commit, error)
-	repoPrepare(context.Context, string, string, *string, any, *int64) (PreparedCommit, error)
+	repoCheckout(context.Context, string, bool) (*cstxproto.Commit, error)
+	repoCommit(context.Context, string, string, *string, *structpb.Struct) (*cstxproto.Commit, error)
+	repoPrepare(context.Context, string, string, *string, *structpb.Struct, *int64) (*cstxproto.PublicationPlan, error)
 	repoAccept(context.Context, string) error
 	repoDiscard(context.Context) error
-	repoSynchronize(context.Context, RepositorySync) error
+	repoSynchronize(context.Context, *cstxproto.RepositoryState) error
 	repoContains(context.Context, string) (bool, error)
-	repoMissingTree(context.Context, string) ([]string, error)
-	repoObjectClosure(context.Context, string) ([]string, error)
-	repoMissingPrepare(context.Context, string) ([]string, error)
-	repoMissingHistory(context.Context, string, string) ([]string, error)
-	repoMissingStat(context.Context, string) ([]string, error)
-	repoMissingCommits(context.Context, string, int) ([]string, error)
-	repoMissingDiff(context.Context, string, string, DiffDetail) ([]string, error)
-	repoMissingDelta(context.Context, string, *int64, *int64) ([]string, error)
-	repoMissingMerge(context.Context, string, string) ([]string, error)
+	repoMissing(context.Context, *cstxproto.RepositoryObjectPlan) (*cstxproto.ObjectSelection, error)
 	repoReleaseTransientObjects(context.Context) error
-	repoDiff(context.Context, string, string, DiffOptions) (GraphDiff, error)
-	repoLog(context.Context, string, int) ([]map[string]any, error)
-	repoHistory(context.Context, string, string, *int) ([]map[string]any, error)
+	repoDiff(context.Context, string, string, *uint64, cstxproto.DiffDetail) (*cstxproto.GraphDiff, error)
+	repoLog(context.Context, string, int) (*cstxproto.CommitLog, error)
+	repoHistory(context.Context, string, string, *int) (*cstxproto.EntityHistory, error)
 	repoBranch(context.Context, string, string) (string, error)
-	repoMerge(context.Context, string, string, *string, *string) (Commit, error)
-	repoStat(context.Context, string, uint64, uint64) (GraphStats, error)
-	repoDelta(context.Context, string, *int64, *int64) (Delta, error)
+	repoMerge(context.Context, string, string, *string, *string) (*cstxproto.Commit, error)
+	repoStat(context.Context, string, uint64, uint64) (*cstxproto.GraphStats, error)
+	repoDelta(context.Context, string, *int64, *int64) (*cstxproto.GraphChangeSummary, error)
 }
 
 type graphCursor interface {
-	page(context.Context, int, int) (CursorPage, error)
+	page(context.Context, int, int) (*cstxproto.GraphResultPage, error)
 	close()
 }

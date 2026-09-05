@@ -3,11 +3,14 @@ package cstx
 import (
 	"fmt"
 	"testing"
+
+	"github.com/chainreactors/libcstx/go/proto/cstxproto"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 // A per-entity history is cheap because the index pages in the postings for that
 // one entity, not every object the range's snapshots contain. That property is
-// only reachable from Go once MissingHistory exists: a host that keeps objects
+// only reachable from Go once the history plan exists: a host that keeps objects
 // outside the runtime has no other way to learn which index pages to hand over,
 // and would have to fall back to materializing each snapshot and comparing
 // content hashes — the very cost the index exists to avoid.
@@ -20,24 +23,22 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 	const tracked = "domain:tracked.example"
 
 	writer := openRuntime(t)
-	objects := map[string]RepositoryObject{}
+	objects := map[string]*cstxproto.RepositoryState_Object{}
 	var head, indexRoot string
 	var commits []string
-	var commitObject RepositoryObject
+	var commitObject *cstxproto.RepositoryState_Object
 
 	for round := range rounds {
 		// The tracked node changes every round...
-		if _, err := writer.Graph.AddNodes(testContext, []Node{{
-			ID: tracked, Type: "domain", Value: "tracked.example",
-			Model:   map[string]any{"domain": "tracked.example", "cstx_flags": 0},
-			Sources: []string{"test"},
-			Extras:  map[string]any{"round": round},
-		}}); err != nil {
+		trackedNode := domainNode("tracked.example")
+		trackedNode.Id = stringPtr(tracked)
+		trackedNode.Annotations = &structpb.Struct{Fields: map[string]*structpb.Value{"round": structpb.NewNumberValue(float64(round))}}
+		if _, err := writer.Graph.AddNodes(testContext, []*cstxproto.Node{trackedNode}); err != nil {
 			t.Fatalf("round %d tracked node: %v", round, err)
 		}
 		// ...surrounded by nodes that do not, so the snapshot is wide while the
 		// entity's own history stays short.
-		filler := make([]Node, 0, width)
+		filler := make([]*cstxproto.Node, 0, width)
 		for i := range width {
 			filler = append(filler, domainNode(fmt.Sprintf("filler-%d-%d.example", round, i)))
 		}
@@ -56,16 +57,16 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 			t.Fatalf("prepare round %d: %v", round, err)
 		}
 		for _, object := range prepared.Objects {
-			stored := RepositoryObject{ID: object.ID, Envelope: append([]byte(nil), object.Envelope...)}
-			objects[object.ID] = stored
-			if object.Kind == "commit" && object.ID == prepared.Commit.ID {
+			stored := &cstxproto.RepositoryState_Object{Id: object.Id, Payload: append([]byte(nil), object.Payload...)}
+			objects[object.Id] = stored
+			if object.Kind == cstxproto.RepositoryObjectKind_REPOSITORY_OBJECT_KIND_COMMIT && object.Id == prepared.Commit.Id {
 				commitObject = stored
 			}
 		}
-		if err := writer.Repo.Accept(testContext, prepared.Commit.ID); err != nil {
+		if err := writer.Repo.Accept(testContext, prepared.Commit.Id); err != nil {
 			t.Fatalf("accept round %d: %v", round, err)
 		}
-		head = prepared.Commit.ID
+		head = prepared.Commit.Id
 		commits = append(commits, head)
 		indexRoot = prepared.IndexRoot
 	}
@@ -79,32 +80,32 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 	// postings, so everything a plan needs has to arrive through synchronize.
 	seed := func() *CSTX {
 		reader := openRuntime(t)
-		if err := reader.Repo.Synchronize(testContext, RepositorySync{
-			Objects: []RepositoryObject{commitObject, rootObject},
+		if err := reader.Repo.Synchronize(testContext, &cstxproto.RepositoryState{
+			Objects: []*cstxproto.RepositoryState_Object{commitObject, rootObject},
 		}); err != nil {
 			t.Fatalf("synchronize frontier objects: %v", err)
 		}
-		if err := reader.Repo.Synchronize(testContext, RepositorySync{
-			Refs:    []RepositoryRef{{Name: "main", Commit: &head}},
-			Indexes: []RepositoryIndex{{Commit: head, IndexRoot: indexRoot}},
+		if err := reader.Repo.Synchronize(testContext, &cstxproto.RepositoryState{
+			Refs:    []*cstxproto.RepositoryState_Ref{{Name: "main", CommitId: &head}},
+			Indexes: []*cstxproto.RepositoryState_Index{{CommitId: head, IndexRoot: indexRoot}},
 		}); err != nil {
 			t.Fatalf("synchronize frontier refs: %v", err)
 		}
 		return reader
 	}
 
-	hydrate := func(reader *CSTX, plan func() ([]string, error)) int {
+	hydrate := func(reader *CSTX, plan func() (*cstxproto.ObjectSelection, error)) int {
 		read := 0
 		for {
 			missing, err := plan()
 			if err != nil {
 				t.Fatalf("plan: %v", err)
 			}
-			if len(missing) == 0 {
+			if len(missing.ObjectIds) == 0 {
 				return read
 			}
-			batch := make([]RepositoryObject, 0, len(missing))
-			for _, id := range missing {
+			batch := make([]*cstxproto.RepositoryState_Object, 0, len(missing.ObjectIds))
+			for _, id := range missing.ObjectIds {
 				object, ok := objects[id]
 				if !ok {
 					t.Fatalf("planner requested an object that was never stored: %s", id)
@@ -112,25 +113,25 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 				batch = append(batch, object)
 			}
 			read += len(batch)
-			if err := reader.Repo.Synchronize(testContext, RepositorySync{Objects: batch}); err != nil {
+			if err := reader.Repo.Synchronize(testContext, &cstxproto.RepositoryState{Objects: batch}); err != nil {
 				t.Fatalf("synchronize: %v", err)
 			}
 		}
 	}
 
 	historyReader := seed()
-	historyObjects := hydrate(historyReader, func() ([]string, error) {
-		return historyReader.Repo.MissingHistory(testContext, head, tracked)
+	historyObjects := hydrate(historyReader, func() (*cstxproto.ObjectSelection, error) {
+		return historyReader.Repo.Missing(testContext, &cstxproto.RepositoryObjectPlan{Kind: cstxproto.RepositoryPlanKind_REPOSITORY_PLAN_HISTORY, CommitId: head, EntityId: stringPtr(tracked)})
 	})
 	entries, err := historyReader.Repo.History(testContext, tracked, head, nil)
 	if err != nil {
 		t.Fatalf("history: %v", err)
 	}
-	if len(entries.Entries) != rounds {
-		t.Fatalf("history returned %d entries, want %d (one per round)", len(entries.Entries), rounds)
+	if len(entries.Changes) != rounds {
+		t.Fatalf("history returned %d entries, want %d (one per round)", len(entries.Changes), rounds)
 	}
 
-	// The fallback a host without MissingHistory is stuck with: materialize every
+	// The fallback without an indexed history plan is to materialize every
 	// snapshot in the range and compare the entity's content hash across them.
 	// One snapshot is cheap; the range is not, and it grows with history depth
 	// while the entity's own change count does not.
@@ -141,13 +142,13 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 		if !ok {
 			t.Fatalf("commit object %s was never published", commit)
 		}
-		if err := reader.Repo.Synchronize(testContext, RepositorySync{
-			Objects: []RepositoryObject{commitEnvelope},
+		if err := reader.Repo.Synchronize(testContext, &cstxproto.RepositoryState{
+			Objects: []*cstxproto.RepositoryState_Object{commitEnvelope},
 		}); err != nil {
 			t.Fatalf("synchronize commit %s: %v", commit, err)
 		}
-		walkObjects += 1 + hydrate(reader, func() ([]string, error) {
-			return reader.Repo.MissingTree(testContext, commit)
+		walkObjects += 1 + hydrate(reader, func() (*cstxproto.ObjectSelection, error) {
+			return reader.Repo.Missing(testContext, &cstxproto.RepositoryObjectPlan{Kind: cstxproto.RepositoryPlanKind_REPOSITORY_PLAN_TREE, CommitId: commit})
 		})
 	}
 
@@ -160,6 +161,6 @@ func TestRepositoryHistoryHydratesOnlyEntityPostings(t *testing.T) {
 	}
 	t.Logf(
 		"per-entity history: %d objects for %d changes; snapshot walk over %d commits: %d objects",
-		historyObjects, len(entries.Entries), len(commits), walkObjects,
+		historyObjects, len(entries.Changes), len(commits), walkObjects,
 	)
 }
