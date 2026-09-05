@@ -4,25 +4,32 @@ import (
 	"context"
 	"errors"
 	"sync"
+
+	"github.com/chainreactors/libcstx/go/proto/cstxproto"
 )
 
-// Config configures an in-memory CSTX runtime.
-type Config struct {
-	// ProjectID namespaces the runtime; defaults to "default".
-	ProjectID string
-	// CursorPageSize bounds incremental cursor materialization; defaults to
-	// DefaultCursorPageSize.
-	CursorPageSize int
+type runtimeConfig struct {
+	projectID      string
+	cursorPageSize int
+	// Which spelling of a node payload reads return. A program holding no
+	// generated type for a node needs the value spelling, so this has to
+	// survive normalization rather than being dropped here.
+	payloadFormat cstxproto.PayloadFormat
 }
 
-func (c Config) normalize() Config {
-	if c.ProjectID == "" {
-		c.ProjectID = "default"
+func normalizeRuntimeConfig(value *cstxproto.RuntimeConfig) runtimeConfig {
+	config := runtimeConfig{projectID: "default", cursorPageSize: DefaultCursorPageSize}
+	if value == nil {
+		return config
 	}
-	if c.CursorPageSize <= 0 {
-		c.CursorPageSize = DefaultCursorPageSize
+	if value.ProjectId != "" {
+		config.projectID = value.ProjectId
 	}
-	return c
+	if value.CursorPageSize > 0 {
+		config.cursorPageSize = int(value.CursorPageSize)
+	}
+	config.payloadFormat = value.PayloadFormat
+	return config
 }
 
 // CSTX is the single owner of shared schema, graph, and repository
@@ -31,38 +38,34 @@ type CSTX struct {
 	eng       engine
 	projectID string
 
-	// Schemas, Graph, and Repo are lightweight namespaces sharing
+	// Extensions, Graph, and Repo are lightweight namespaces sharing
 	// this runtime's state.
-	Schemas *Schemas
-	Graph   *Graph
-	Repo    *Repository
-	Raw     *Raw
+	Extensions *Extensions
+	Graph      *Graph
+	Repo       *Repository
 
 	mu     sync.Mutex
 	closed bool
 }
 
 // Open creates an in-memory native runtime.
-func Open(ctx context.Context, config Config) (*CSTX, error) {
+func Open(ctx context.Context, value *cstxproto.RuntimeConfig) (*CSTX, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	config = config.normalize()
+	config := normalizeRuntimeConfig(value)
 	eng, err := newEngine(config)
 	if err != nil {
 		return nil, err
 	}
-	return wrapRuntime(eng, config.ProjectID), nil
+	return wrapRuntime(eng, config.projectID), nil
 }
 
 func wrapRuntime(eng engine, projectID string) *CSTX {
 	rt := &CSTX{eng: eng, projectID: projectID}
-	rt.Schemas = &Schemas{eng: eng}
+	rt.Extensions = &Extensions{eng: eng}
 	rt.Graph = &Graph{eng: eng}
 	rt.Repo = &Repository{eng: eng}
-	if raw, ok := eng.(rawEngine); ok {
-		rt.Raw = &Raw{eng: raw}
-	}
 	return rt
 }
 
@@ -96,9 +99,9 @@ func (c *CSTX) Closed() bool {
 }
 
 // LastChange returns the IDs changed by the most recent committed mutation.
-func (c *CSTX) LastChange(ctx context.Context) (ChangeSet, error) {
+func (c *CSTX) LastChange(ctx context.Context) (*cstxproto.GraphChangeSet, error) {
 	if err := contextError(ctx); err != nil {
-		return ChangeSet{}, err
+		return nil, err
 	}
 	return c.eng.lastChange(ctx)
 }

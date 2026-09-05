@@ -9,17 +9,22 @@ from cstxpy._cstxpy import (
     RagRetrieval,
     RagIndexSession,
     RagRecordCursor,
-    NodeFlags,
     Repository,
-    Schemas,
+    Extensions,
+    Algorithm,
+    decode_object,
     __version__,
     is_path_expression,
 )
+from cstxpy.flags import NodeFlags
+from . import easmproto, proto
 
 __all__ = [
     "CSTX",
     "CSTXError",
-    "Schemas",
+    "Extensions",
+    "Algorithm",
+    "decode_object",
     "CSTXGraph",
     "Rag",
     "RagRetrieval",
@@ -30,4 +35,6 @@ __all__ = [
     "NodeFlags",
     "is_path_expression",
     "__version__",
+    "proto",
+    "easmproto",
 ]

@@ -1,11 +1,4 @@
-"""Typed public surface for the low-level CSTX Rust runtime.
-
-The binding deliberately exposes ordinary ``dict``, ``list``, ``bytes``,
-``int``, keyword arguments, and iterators.  It does not introduce public node,
-filter, or options wrapper classes.  ``*_json`` methods are explicit transport
-fast paths for data that is already JSON or must leave CSTX as JSON; they are
-not replacements for the native Python APIs.
-"""
+"""Typed public surface for the low-level CSTX Rust runtime."""
 
 from __future__ import annotations
 
@@ -14,18 +7,8 @@ from typing import Any, Iterator
 __version__: str
 
 
-def _object_id(envelope: bytes) -> bytes:
-    """Validate one internal object envelope and return its 32-byte ObjectId."""
-    ...
-
-
-def _object_kind(envelope: bytes) -> str:
-    """Validate one internal object envelope and return its closed object kind."""
-    ...
-
-
-def _verify_object(envelope: bytes) -> tuple[bytes, str]:
-    """Validate once and return the internal ObjectId and object kind."""
+def decode_object(envelope: bytes) -> tuple[bytes, str]:
+    """Validate an object envelope once and return its ID and kind."""
     ...
 
 
@@ -51,7 +34,70 @@ class CSTXError(Exception):
     """Observed type or value description when available."""
 
 
-class GraphCursor(Iterator[dict[str, Any]]):
+class Algorithm:
+    """Typed graph algorithm request built at the Python boundary."""
+
+    @staticmethod
+    def bfs(seed_id: str, depth: int = 0, direction: str = "out",
+            max_visited_nodes: int | None = None, timeout_ms: int | None = None) -> Algorithm:
+        """Build a breadth-first traversal request."""
+        ...
+    @staticmethod
+    def weak_components() -> Algorithm:
+        """Build a weakly connected-components request."""
+        ...
+    @staticmethod
+    def strong_components() -> Algorithm:
+        """Build a strongly connected-components request."""
+        ...
+    @staticmethod
+    def cycle_basis() -> Algorithm:
+        """Build a cycle-basis request."""
+        ...
+    @staticmethod
+    def bridges() -> Algorithm:
+        """Build a bridge-edge request."""
+        ...
+    @staticmethod
+    def articulation_points() -> Algorithm:
+        """Build an articulation-point request."""
+        ...
+    @staticmethod
+    def core_numbers() -> Algorithm:
+        """Build a core-number request."""
+        ...
+    @staticmethod
+    def is_dag() -> Algorithm:
+        """Build a directed-acyclic-graph check request."""
+        ...
+    @staticmethod
+    def topological_order() -> Algorithm:
+        """Build a topological-order request."""
+        ...
+    @staticmethod
+    def betweenness(include_endpoints: bool = False, normalized: bool = True,
+                    top_k: int | None = None) -> Algorithm:
+        """Build a betweenness-centrality request."""
+        ...
+    @staticmethod
+    def closeness(wf_improved: bool = True, top_k: int | None = None) -> Algorithm:
+        """Build a closeness-centrality request."""
+        ...
+    @staticmethod
+    def leiden(resolution: float = 1.0, min_community_size: int = 2,
+               top_k: int | None = None) -> Algorithm:
+        """Build a Leiden community-detection request."""
+        ...
+    @staticmethod
+    def shortest_paths(start_id: str, end_id: str, direction: str = "out",
+                       max_depth: int = 0, limit: int = 10,
+                       max_visited_nodes: int | None = None,
+                       timeout_ms: int | None = None) -> Algorithm:
+        """Build a shortest-path enumeration request."""
+        ...
+
+
+class GraphCursor(Iterator[bytes]):
     """Unified graph-result cursor with one-based ``limit + page`` pagination."""
 
     @property
@@ -59,8 +105,12 @@ class GraphCursor(Iterator[dict[str, Any]]):
         """Logical row shape emitted by this cursor."""
         ...
 
-    def page(self, limit: int = 1024, page: int = 1) -> dict[str, Any]:
-        """Materialize one page without rerunning the originating operation."""
+    def next(self) -> bytes | None:
+        """Return the next Node or Relationship protobuf row."""
+        ...
+
+    def page(self, limit: int = 1024, page: int = 1) -> bytes:
+        """Materialize one page as a typed ``GraphResultPage`` protobuf."""
         ...
 
     @property
@@ -81,64 +131,43 @@ class GraphCursor(Iterator[dict[str, Any]]):
         ...
 
 
-class Schemas:
-    """Schema/plugin namespace sharing state with its owning ``CSTX`` runtime."""
+class Extensions:
+    """Unified extension lifecycle and schema namespace."""
 
-    def import_schema(self, schema: dict[str, Any]) -> None:
-        """Atomically validate and register a portable schema contract."""
+    def register(self, contract: bytes) -> None:
+        """Atomically register one serialized ExtensionContract protobuf."""
         ...
 
-    def export_schema(self) -> dict[str, Any]:
-        """Export the complete portable schema contract."""
+    def enable(self, name: str) -> None:
+        """Explicitly enable one linked native Rust extension."""
         ...
 
-    def register(
-        self,
-        node_type: str,
-        schema: dict[str, Any],
-        value_field: str | None = None,
-    ) -> None:
-        """Register CSTX validation metadata without a Python schema wrapper."""
+    def list(self) -> bytes:
+        """List metadata as an ``ExtensionCatalog`` protobuf."""
         ...
 
-    def register_join_rule(self, rule: dict[str, Any]) -> None:
-        """Register a native linker rule using the KeyExpr DSL."""
+    def info(self, name: str) -> bytes:
+        """Return metadata as an ``ExtensionInfo`` protobuf."""
         ...
 
     def contains(self, node_type: str) -> bool:
-        """Check schema existence without materializing the schema dictionary."""
+        """Check schema existence."""
         ...
 
-    def get(self, node_type: str) -> dict[str, Any]:
-        """Return one retained schema as an ordinary dictionary."""
+    def schema(self, node_type: str) -> bytes:
+        """Return one retained schema as a ``NodeType`` protobuf."""
         ...
 
-    def list(self) -> list[dict[str, Any]]:
-        """Return retained schemas in deterministic node-type order."""
-        ...
-
-    def load_plugin(self, name: str) -> None:
-        """Load one linked native plugin into the shared graph engine."""
-        ...
-
-    def load_all_plugins(self) -> None:
-        """Load every linked native plugin into the shared graph engine."""
-        ...
-
-    def available_plugins(self) -> list[str]:
-        """List linked plugins without changing runtime state."""
-        ...
-
-    def plugin_artifacts(self, name: str) -> list[str]:
-        """List artifacts provided by one linked plugin."""
+    def schemas(self) -> bytes:
+        """Return retained schemas as a ``NodeTypeCatalog`` protobuf."""
         ...
 
     def has_native_artifact(self, artifact: str) -> bool:
-        """Return whether a linked native parser supports this artifact."""
+        """Return whether an enabled native parser supports an artifact."""
         ...
 
-    def anchor_concepts(self) -> list[tuple[str, list[str]]]:
-        """List native anchor concepts and member node types."""
+    def anchor_concepts(self) -> bytes:
+        """List native concepts as an ``AnchorConceptCatalog`` protobuf."""
         ...
 
 
@@ -149,28 +178,60 @@ class CSTXGraph:
         """Return the GraphRAG extension bound to this graph."""
         ...
 
-    def ingest_native(
-        self, plugin: str, artifact: str, data: bytes
-    ) -> dict[str, Any]:
-        """Ingest plugin bytes and return detailed native mutation statistics."""
+    def add_nodes(self, data: bytes) -> int:
+        """Add a serialized semantic ``Graph`` protobuf."""
         ...
 
-    def link(self, node_ids: list[str], data_source: str) -> dict[str, Any]:
-        """Run native linker rules for selected nodes."""
+    def replace_nodes(self, data: bytes) -> int:
+        """Replace graph contents from a serialized semantic ``Graph`` protobuf."""
         ...
 
-    def update_node_flags(
-        self,
-        node_ids: list[str],
-        add: int = 0,
-        remove: int = 0,
-        set_to: int | None = None,
-    ) -> int:
-        """Atomically update selected nodes' native flag bitsets."""
+    def add_relationships(self, data: bytes) -> int:
+        """Add relationships from a serialized semantic ``Graph`` protobuf."""
+        ...
+
+    def node(self, node_id: str) -> bytes:
+        """Return one semantic ``Node`` protobuf."""
+        ...
+
+    def relationship(self, relationship_id: str) -> bytes:
+        """Return one semantic ``Relationship`` protobuf."""
+        ...
+
+    def find_node(self, identifier: str) -> bytes:
+        """Resolve an identifier and return a semantic ``Node`` protobuf."""
+        ...
+
+    def nodes(self, filter: bytes, window: bytes) -> GraphCursor:
+        """Create a cursor from serialized ``NodeFilter`` and ``QueryWindow``."""
+        ...
+
+    def relationships(self, filter: bytes, window: bytes) -> GraphCursor:
+        """Create a cursor from serialized ``RelationshipFilter`` and ``QueryWindow``."""
+        ...
+
+    def neighbors(self, data: bytes) -> GraphCursor:
+        """Create a cursor from serialized ``NeighborQuery``."""
+        ...
+
+    def query(self, data: bytes) -> GraphCursor:
+        """Create a cursor from serialized ``GraphQuery``."""
+        ...
+
+    def ingest(self, data: bytes) -> bytes:
+        """Ingest serialized semantic ``ParserPayload`` bytes."""
+        ...
+
+    def link(self, selection: bytes, data_source: str) -> bytes:
+        """Run linker rules from a ``GraphSelection`` protobuf payload."""
+        ...
+
+    def update_node_flags(self, data: bytes) -> int:
+        """Atomically update selected nodes from a serialized ``NodeFlagChange``."""
         ...
 
     def analyze(
-        self, algorithm: dict[str, Any], selection: str | None = None
+        self, algorithm: Algorithm, selection: str | None = None
     ) -> bool | GraphCursor | None:
         """Execute one typed graph algorithm."""
         ...
@@ -197,9 +258,9 @@ class CSTXGraph:
         ...
 
     def induced_subgraph(
-        self, node_ids: list[str], edge_ids: list[str] | None = None
+        self, node_ids: list[str], relationship_ids: list[str] | None = None
     ) -> CSTX:
-        """Materialize selected nodes and optional edges."""
+        """Materialize selected nodes and optional relationships."""
         ...
 
     def filter(
@@ -220,62 +281,28 @@ class CSTXGraph:
         """Return a filtered graph, exclusions with reasons, and reuse status."""
         ...
 
-    def find_anchors(self, concept_name: str) -> list[dict[str, Any]]:
-        """Find native anchor instances by concept name."""
+    def find_anchors(self, concept_name: str) -> bytes:
+        """Find native anchors as a ``GraphAnchorCatalog`` protobuf."""
         ...
 
     def elevate(self, concept_name: str) -> CSTX:
         """Return an elevated graph handle."""
         ...
 
-    def add_nodes(self, nodes: list[dict[str, Any]]) -> int:
-        """Atomically mutate native dictionaries without a JSON round trip."""
-        ...
-
-    def replace_nodes(self, nodes: list[dict[str, Any]]) -> int:
-        """Atomically overwrite native dictionaries instead of merging them."""
-        ...
-
-    def add_edges(self, edges: list[dict[str, Any]]) -> int:
-        """Atomically mutate native relationship dictionaries."""
-        ...
-
     def delete_nodes(self, node_ids: list[str]) -> int:
         """Atomically remove nodes and their incident relationships."""
         ...
 
-    def delete_edges(self, edge_ids: list[str]) -> int:
+    def delete_relationships(self, relationship_ids: list[str]) -> int:
         """Atomically remove relationships by stable CSTX ID."""
         ...
 
-    def node(self, node_id: str) -> dict[str, Any]:
-        """Return one node dictionary or raise ``CSTXError(NOT_FOUND)``."""
+    def patch_node_extras(self, data: bytes) -> int:
+        """Merge annotations from a serialized ``NodeAnnotationUpdate``."""
         ...
 
-    def edge(self, edge_id: str) -> dict[str, Any]:
-        """Return one relationship dictionary or raise ``CSTXError(NOT_FOUND)``."""
-        ...
-
-    def find_node(self, identifier: str) -> dict[str, Any] | None:
-        """Resolve a node by ID, value, or extras.name."""
-        ...
-
-    def patch_node_extras(
-        self, node_ids: list[str] | None, patch: dict[str, Any]
-    ) -> int:
-        """Merge contextual fields into selected node extras; None selects all."""
-        ...
-
-    def create_relationship(
-        self,
-        source_id: str,
-        target_id: str,
-        relation: str,
-        sources: list[str] = [],
-        attrs: dict[str, Any] | None = None,
-        identity_key: str | None = None,
-    ) -> dict[str, Any]:
-        """Create or merge a relationship with Rust-owned identity."""
+    def add_relationship(self, data: bytes) -> bytes:
+        """Create or merge one relationship from a serialized protobuf."""
         ...
 
     def union(self, other: CSTXGraph) -> CSTX:
@@ -304,7 +331,7 @@ class CSTXGraph:
         """Return the current number of nodes."""
         ...
 
-    def edge_count(self) -> int:
+    def relationship_count(self) -> int:
         """Return the current number of relationships."""
         ...
 
@@ -313,81 +340,9 @@ class CSTXGraph:
         exclude_mask: int = 0,
         include_mask: int = 0,
         selection: str | None = None,
-    ) -> dict[str, dict[str, int]]:
-        """Return aggregate counts for an optional query selection and flag masks."""
+    ) -> bytes:
+        """Return aggregate counts as a ``GraphStats`` protobuf payload."""
         ...
-
-    def nodes(
-        self,
-        types: list[str] | None = None,
-        ids: list[str] | None = None,
-        sources: list[str] | None = None,
-        name_contains: str | None = None,
-        flags_all: int = 0,
-        flags_any: int = 0,
-        flags_none: int = 0,
-        limit: int | None = None,
-        page: int = 1,
-        order: str = "unspecified",
-    ) -> GraphCursor:
-        """Create a unified cursor over matching node dictionaries.
-
-        Keyword filters avoid public filter/options wrapper objects. ``order``
-        accepts ``unspecified``, ``id_asc``, or ``id_desc``.
-        """
-        ...
-
-    def nodes_page(
-        self,
-        node_type: str | None = None,
-        name_pattern: str | None = None,
-        exclude_mask: int = 0,
-        include_mask: int = 0,
-        limit: int = 500,
-        page: int = 1,
-    ) -> dict[str, Any]:
-        """Return one bounded node page with exact totals and type counts."""
-        ...
-
-    def edges(
-        self,
-        source_id: str | None = None,
-        target_id: str | None = None,
-        relations: list[str] | None = None,
-        sources: list[str] | None = None,
-        limit: int | None = None,
-        page: int = 1,
-        order: str = "unspecified",
-    ) -> GraphCursor:
-        """Create a unified cursor over matching relationship dictionaries."""
-        ...
-
-    def neighbors(
-        self,
-        node_id: str,
-        direction: str = "out",
-        limit: int | None = None,
-        page: int = 1,
-        order: str = "unspecified",
-    ) -> GraphCursor:
-        """Return a unified cursor over neighboring nodes."""
-        ...
-
-    def query(
-        self,
-        expression: str,
-        limit: int | None = None,
-        page: int = 1,
-        types: list[str] | None = None,
-        ids: list[str] | None = None,
-        name_contains: str | None = None,
-        exclude_mask: int = 0,
-        include_mask: int = 0,
-        order: str = "unspecified",
-    ) -> GraphCursor:
-        """Execute the graph DSL once and return a unified result cursor."""
-        ...
-
 
 class Repository:
     """Git-like repository over one shared working tree."""
@@ -405,10 +360,10 @@ class Repository:
         message: str,
         ref_name: str,
         expected_head: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        metadata: bytes | None = None,
         timestamp: int | None = None,
-    ) -> tuple[dict[str, Any], bytes, list[tuple[bytes, str, bytes]]]:
-        """Prepare one complete commit payload for external publication."""
+    ) -> bytes:
+        """Prepare a serialized ``PublicationPlan`` protobuf."""
         ...
 
     def _accept(self, commit: bytes) -> None:
@@ -425,77 +380,18 @@ class Repository:
         target: str = "main",
         expected_head: str | None = None,
         message: str | None = None,
-        metadata: dict[str, Any] | None = None,
+        metadata: bytes | None = None,
         timestamp: int | None = None,
-    ) -> tuple[dict[str, Any], bytes, list[tuple[bytes, str, bytes]]]:
-        """Prepare one complete merge payload for external publication."""
+    ) -> bytes:
+        """Prepare a serialized merge ``PublicationPlan`` protobuf."""
         ...
 
-    def _synchronize(
-        self,
-        objects: list[tuple[bytes, bytes]],
-        refs: list[tuple[str, bytes | None]],
-        indexes: list[tuple[bytes, bytes]],
-    ) -> None:
-        """Synchronize externally persisted objects, refs, and indexes."""
+    def _synchronize(self, data: bytes) -> None:
+        """Synchronize from a serialized ``RepositoryState`` protobuf."""
         ...
 
-    def _missing_tree(self, commit: bytes) -> list[bytes]:
-        """Return graph-tree objects missing from the native object set."""
-        ...
-
-    def _object_closure(self, commit: bytes) -> list[bytes]:
-        """Return every object this commit and its ancestry are built from."""
-        ...
-
-    def _missing_stat(self, commit: bytes) -> list[bytes]:
-        """Return the graph root needed for persisted statistics."""
-        ...
-
-    def _missing_merge(
-        self,
-        source: bytes,
-        target: bytes | None = None,
-    ) -> list[bytes]:
-        """Return the commit frontier or graph objects needed by merge."""
-        ...
-
-    def _missing_delta(
-        self,
-        commit: bytes,
-        start_timestamp: int | None = None,
-        end_timestamp: int | None = None,
-    ) -> list[bytes]:
-        """Return index nodes needed for a time-bounded delta."""
-        ...
-
-    def _missing_prepare(self, commit: bytes) -> list[bytes]:
-        """Return index nodes needed to prepare the working journal."""
-        ...
-
-    def _missing_history(self, commit: bytes, entity: str) -> list[bytes]:
-        """Return index nodes needed for one entity history."""
-        ...
-
-    def _missing_commits(self, commit: bytes, limit: int) -> list[bytes]:
-        """Return index nodes needed for a bounded commit log."""
-        ...
-
-    def _missing_diff(
-        self,
-        base: bytes,
-        head: bytes,
-        detail: str = "entities",
-    ) -> list[bytes]:
-        """Return index or graph objects needed for a revision diff.
-
-        A limit never narrows the plan, so the request carries only the detail
-        level: ``"counts"`` skips the pages a page summary already answers for.
-        """
-        ...
-
-    def _commits(self, commit: bytes, limit: int) -> list[bytes]:
-        """Return bounded first-parent commit objects for synchronization."""
+    def _missing(self, plan: bytes) -> bytes:
+        """Return a serialized ``ObjectSelection`` protobuf for one plan."""
         ...
 
     def resolve(self, revision: str) -> str:
@@ -510,8 +406,8 @@ class Repository:
         self,
         revision: str = "main",
         force: bool = False,
-    ) -> dict[str, Any]:
-        """Replace the working tree with one committed graph."""
+    ) -> bytes:
+        """Replace the working tree and return a serialized ``Commit`` protobuf."""
         ...
 
     def commit(
@@ -519,10 +415,10 @@ class Repository:
         message: str,
         ref_name: str = "main",
         expected_head: str | None = None,
-        metadata: Any | None = None,
+        metadata: bytes | None = None,
         timestamp: int | None = None,
-    ) -> dict[str, Any]:
-        """Commit the working tree and atomically advance one branch."""
+    ) -> bytes:
+        """Commit the working tree and return a serialized ``Commit`` protobuf."""
         ...
 
     def diff(
@@ -531,8 +427,8 @@ class Repository:
         head: str,
         limit: int | None = None,
         detail: str = "entities",
-    ) -> dict[str, Any]:
-        """Compare two revisions.
+    ) -> bytes:
+        """Compare two revisions and return a serialized ``GraphDiff`` protobuf.
 
         ``limit`` bounds the reported entity IDs; ``detail="counts"`` drops them
         entirely. ``stats`` counts the whole range either way.
@@ -543,8 +439,8 @@ class Repository:
         self,
         revision: str = "main",
         limit: int = 50,
-    ) -> list[dict[str, Any]]:
-        """Return first-parent commits newest first."""
+    ) -> bytes:
+        """Return a serialized ``CommitLog`` protobuf."""
         ...
 
     def history(
@@ -552,8 +448,8 @@ class Repository:
         entity_id: str,
         revision: str = "main",
         limit: int | None = None,
-    ) -> list[dict[str, Any]]:
-        """Return indexed changes for one node or relationship."""
+    ) -> bytes:
+        """Return a serialized ``EntityHistory`` protobuf."""
         ...
 
     def branch(self, name: str, start_point: str = "main") -> str:
@@ -566,10 +462,10 @@ class Repository:
         target: str = "main",
         expected_head: str | None = None,
         message: str | None = None,
-        metadata: Any | None = None,
+        metadata: bytes | None = None,
         timestamp: int | None = None,
-    ) -> dict[str, Any]:
-        """Merge one branch or commit into a target branch."""
+    ) -> bytes:
+        """Merge one branch and return a serialized ``Commit`` protobuf."""
         ...
 
     def stat(
@@ -577,8 +473,8 @@ class Repository:
         revision: str = "main",
         exclude_mask: int = 0,
         include_mask: int = 0,
-    ) -> dict[str, dict[str, int]]:
-        """Return persisted graph aggregates without loading graph state."""
+    ) -> bytes:
+        """Return persisted aggregates as a serialized ``GraphStats`` protobuf."""
         ...
 
     def delta(
@@ -586,20 +482,20 @@ class Repository:
         revision: str = "main",
         start_timestamp: int | None = None,
         end_timestamp: int | None = None,
-    ) -> dict[str, Any]:
-        """Return a time-bounded commit-index delta without loading graph state."""
+    ) -> bytes:
+        """Return a time-bounded delta as a serialized ``GraphChangeSummary`` protobuf."""
         ...
 
 
 class Rag:
     """Graph-owned projection and retrieval planner."""
 
-    def index(self, request: dict[str, Any]) -> RagIndexSession:
-        """Project graph changes into a retained deterministic index session."""
+    def index(self, data: bytes) -> RagIndexSession:
+        """Project a serialized ``RagIndexPlan`` protobuf into a retained session."""
         ...
 
-    def retrieve(self, query: dict[str, Any]) -> RagRetrieval:
-        """Suspend retrieval until external recall batches are supplied."""
+    def retrieve(self, data: bytes) -> RagRetrieval:
+        """Suspend retrieval from a serialized ``RagQuery`` protobuf."""
         ...
 
 
@@ -638,18 +534,9 @@ class RagIndexSession:
         """Stream projected records through a bounded native cursor."""
         ...
 
-    def pending_json(
-        self,
-        _model_revision: str,
-        batch_size: int = 512,
-    ) -> bytes:
-        """Return one projected-record batch as JSON bytes."""
+    def deletes(self) -> list[str]:
+        """Return deleted record IDs."""
         ...
-
-    def deletes_json(self) -> bytes:
-        """Return deleted record IDs as JSON bytes."""
-        ...
-
     def close(self) -> None:
         """Release the retained projection."""
         ...
@@ -660,15 +547,15 @@ class RagIndexSession:
         ...
 
 
-class RagRecordCursor(Iterator[dict[str, Any]]):
-    """Bounded iterator over projected record dictionaries."""
+class RagRecordCursor(Iterator[bytes]):
+    """Bounded iterator over serialized ``RagRecord`` protobuf messages."""
 
     def __iter__(self) -> RagRecordCursor:
         """Return this cursor as its iterator."""
         ...
 
-    def __next__(self) -> dict[str, Any]:
-        """Return the next projected record or raise StopIteration."""
+    def __next__(self) -> bytes:
+        """Return the next projected record protobuf or raise StopIteration."""
         ...
 
     def close(self) -> None:
@@ -684,20 +571,12 @@ class RagRecordCursor(Iterator[dict[str, Any]]):
 class RagRetrieval:
     """Suspended retrieval bound to one graph generation and checkpoint."""
 
-    def requests(self) -> list[dict[str, Any]]:
-        """Return recall requests required to complete this retrieval."""
+    def requests(self) -> bytes:
+        """Return a serialized ``RecallPlan`` protobuf."""
         ...
 
-    def requests_json(self) -> bytes:
-        """Return recall requests as JSON bytes."""
-        ...
-
-    def complete(self, batches: list[dict[str, Any]]) -> dict[str, Any]:
-        """Fuse recall batches and build the structured graph context."""
-        ...
-
-    def complete_json(self, batches: bytes) -> bytes:
-        """Fuse JSON batches and return the result as JSON bytes."""
+    def complete(self, data: bytes) -> bytes:
+        """Fuse serialized ``RecallResults`` and return a ``RagResult`` protobuf."""
         ...
 
 
@@ -708,13 +587,19 @@ class CSTX:
         self,
         project_id: str = "default",
         cursor_page_size: int = 1024,
+        payload_format: int = 0,
     ) -> None:
-        """Open an in-memory runtime with bounded cursor materialization."""
+        """Open an in-memory runtime with bounded cursor materialization.
+
+        ``payload_format`` is the ``cstx.PayloadFormat`` number: 0 returns node
+        payloads as the stored ``Any``, 1 returns them as ``EntityValue``,
+        which a caller with no generated message type can still read.
+        """
         ...
 
     @property
-    def schemas(self) -> Schemas:
-        """Return the lightweight schema namespace for this runtime."""
+    def extensions(self) -> Extensions:
+        """Return the unified extension namespace for this runtime."""
         ...
 
     @property
@@ -741,8 +626,8 @@ class CSTX:
         """Close shared state and invalidate retained services/cursors."""
         ...
 
-    def last_change(self) -> dict[str, Any]:
-        """Return IDs changed by the most recent committed mutation."""
+    def last_change(self) -> bytes:
+        """Return the most recent mutation as serialized GraphChangeSet protobuf."""
         ...
 
     def __enter__(self) -> CSTX:
@@ -754,28 +639,3 @@ class CSTX:
         ...
 
 
-class NodeFlags:
-    """Discoverable namespace of engine-compatible integer bit constants.
-
-    Graph APIs still accept ordinary ``int`` values; this class is not a node
-    flag wrapper and cannot create instances.
-    """
-
-    NONE: int
-    HONEYPOT: int
-    NOISE: int
-    FALSE_POSITIVE: int
-    MANUAL_IGNORED: int
-    THREAT_PRESENT: int
-    HISTORIC_VULNERABLE: int
-    INTERNAL: int
-
-    @staticmethod
-    def all_mask() -> int:
-        """Return a mask containing every currently defined node flag."""
-        ...
-
-    @staticmethod
-    def default_exclude_mask() -> int:
-        """Return the engine's standard default-exclusion mask."""
-        ...

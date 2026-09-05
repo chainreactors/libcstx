@@ -1,54 +1,226 @@
 {
-  "schema": {
-    "node_type": "asset",
-    "json_schema": {
-      "properties": {
-        "name": {
-          "type": "string",
-          "x-semantic": true,
-          "x-semantic-label": "name"
+  "document": {
+    "schema_version": 1,
+    "extension": "conformance",
+    "nodes": {
+      "asset": {
+        "message": "conformance.Asset",
+        "value_field": "name",
+        "identity": {
+          "field": "name"
         },
-        "status": {
-          "type": "string",
-          "x-semantic": false
-        }
+        "fields": [
+          {
+            "name": "name",
+            "number": 1,
+            "type": "string",
+            "repeated": false,
+            "optional": false,
+            "semantic": false,
+            "semantic_label": "name"
+          },
+          {
+            "name": "status",
+            "number": 2,
+            "type": "string",
+            "repeated": false,
+            "optional": true,
+            "semantic": true,
+            "semantic_label": "status"
+          }
+        ]
       }
     },
-    "value_field": "name"
+    "relations": {
+      "related": {
+        "message": "conformance.Related"
+      }
+    }
   },
   "nodes": [
     {
       "id": "asset:beta",
       "type": "asset",
       "value": "beta",
-      "model": {"name": "beta", "status": "active"},
-      "sources": ["fixture"],
+      "model": {
+        "name": "beta",
+        "status": "active"
+      },
+      "sources": [
+        "fixture"
+      ],
       "extras": {}
     },
     {
       "id": "asset:alpha",
       "type": "asset",
       "value": "alpha",
-      "model": {"name": "alpha", "status": "active"},
-      "sources": ["fixture"],
+      "model": {
+        "name": "alpha",
+        "status": "active"
+      },
+      "sources": [
+        "fixture"
+      ],
       "extras": {}
     }
   ],
-  "edges": [
+  "relationships": [
     {
       "id": "relationship:asset:alpha:related:asset:beta",
       "source_id": "asset:alpha",
       "target_id": "asset:beta",
       "relation_type": "related",
-      "sources": ["fixture"],
+      "sources": [
+        "fixture"
+      ],
       "attrs": {}
     }
   ],
   "query": "asset",
   "expected": {
-    "node_ids": ["asset:beta", "asset:alpha"],
+    "node_ids": [
+      "asset:beta",
+      "asset:alpha"
+    ],
     "node_count": 2,
-    "edge_count": 1,
-    "pending_embedding_ids": ["asset:alpha", "asset:beta"]
+    "relationship_count": 1,
+    "pending_embedding_ids": [
+      "asset:alpha",
+      "asset:beta"
+    ]
+  },
+  "dynamic_extension": {
+    "_comment": "One type declared at runtime, with no generated message class in any language. Every SDK writes it from field names and reads it back, and they must agree on the id the schema derives and on every value.",
+    "document": {
+      "schema_version": 1,
+      "extension": "acme",
+      "nodes": {
+        "acme_asset": {
+          "message": "acme.Asset",
+          "value_field": "asset_id",
+          "identity": {
+            "field": "asset_id"
+          },
+          "fields": [
+            {
+              "name": "asset_id",
+              "number": 1,
+              "type": "string",
+              "repeated": false,
+              "optional": false,
+              "semantic": false,
+              "semantic_label": "asset_id"
+            },
+            {
+              "name": "owner",
+              "number": 2,
+              "type": "string",
+              "repeated": false,
+              "optional": true,
+              "semantic": true,
+              "semantic_label": "owner"
+            },
+            {
+              "name": "port",
+              "number": 3,
+              "type": "int64",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "port"
+            },
+            {
+              "name": "live",
+              "number": 4,
+              "type": "bool",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "live"
+            },
+            {
+              "name": "tags",
+              "number": 5,
+              "type": "string",
+              "repeated": true,
+              "optional": false,
+              "semantic": true,
+              "semantic_label": "tags"
+            },
+            {
+              "name": "weight",
+              "number": 6,
+              "type": "double",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "weight"
+            },
+            {
+              "name": "rank",
+              "number": 7,
+              "type": "int32",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "rank"
+            },
+            {
+              "name": "hits",
+              "number": 8,
+              "type": "uint32",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "hits"
+            },
+            {
+              "name": "drift",
+              "number": 9,
+              "type": "sint32",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "drift"
+            },
+            {
+              "name": "offset",
+              "number": 10,
+              "type": "sint64",
+              "repeated": false,
+              "optional": true,
+              "semantic": false,
+              "semantic_label": "offset"
+            }
+          ]
+        }
+      },
+      "relations": {
+        "acme_owns": {
+          "message": "acme.Owns"
+        }
+      }
+    },
+    "values": {
+      "asset_id": "a-1",
+      "owner": "ops",
+      "port": 8443,
+      "live": true,
+      "tags": [
+        "edge",
+        "prod"
+      ],
+      "offset": -9007199254740993,
+      "weight": 0.5,
+      "rank": -2147483648,
+      "hits": 4294967295,
+      "drift": -12345
+    },
+    "expected_id": "acme_asset:a-1",
+    "relation": {
+      "relation_type": "acme_owns",
+      "type_url": "type.googleapis.com/acme.Owns"
+    }
   }
 }

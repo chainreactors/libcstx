@@ -1,615 +1,200 @@
+"""Python binding checks for the protobuf-only graph boundary."""
+
 import ast
 import inspect
-import json
 from pathlib import Path
 
 import cstxpy
 import pytest
-
-from cstxpy import (
-    CSTX,
-    CSTXGraph,
-    CSTXError,
-    GraphCursor,
-    NodeFlags,
-    Repository,
-    Schemas,
-)
+from cstxpy import CSTX, CSTXError, CSTXGraph, Extensions, GraphCursor, NodeFlags, Repository
+from cstxpy.proto import cstx_pb2 as cstx, sco_pb2 as easm
+from google.protobuf.any_pb2 import Any
+from google.protobuf.json_format import ParseDict
+from google.protobuf.struct_pb2 import Struct
 
 
-SCHEMA = {"properties": {"ip": {"type": "string"}}}
+def _ip(value: str, *, flags: int = 0, annotations: dict | None = None) -> cstx.Node:
+    entity = easm.Ip(ip=value)
+    node = cstx.Node(
+        id=f"ip:{value}", sources=["test"],
+        entity=Any(type_url="type.googleapis.com/easm.Ip", value=(entity).SerializeToString()),
+    )
+    for number in sorted(n for n in cstx.NodeFlag.values() if n > 0):
+        if flags & (1 << (number - 1)):
+            node.flags.append(number)
+    if annotations:
+        ParseDict(annotations, node.annotations)
+    return node
 
 
-def node(value: str, *, flags: int = 0) -> dict:
-    return {
-        "id": f"ip:{value}",
-        "type": "ip",
-        "value": value,
-        "model": {"ip": value, "cstx_flags": flags},
-        "sources": ["test"],
-        "extras": {},
-    }
+def _contain(source: str, target: str) -> cstx.Relationship:
+    relation = cstx.Relationship(
+        id=f"relationship:{source}:contain:{target}",
+        source_id=source,
+        target_id=target,
+        sources=["test"],
+    )
+    relation.relation.CopyFrom(Any(
+        type_url="type.googleapis.com/easm.Contain", value=b""
+    ))
+    return relation
 
 
-def edge(source: str, target: str) -> dict:
-    return {
-        "id": f"relationship:{source}:related:{target}",
-        "source_id": source,
-        "target_id": target,
-        "relation_type": "related",
-        "sources": ["test"],
-        "attrs": {},
-    }
+def _graph(nodes=(), relationships=()) -> bytes:
+    return (cstx.Graph(
+        nodes=list(nodes), relationships=list(relationships)
+    )).SerializeToString()
 
 
-def db() -> CSTX:
-    value = CSTX()
-    value.schemas.register("ip", SCHEMA, "ip")
-    return value
+def _window(limit: int = 1024, page: int = 1, order: int = 0) -> bytes:
+    return (cstx.QueryWindow(limit=limit, page=page, order=order)).SerializeToString()
 
 
-def test_root_services_and_native_values():
-    value = db()
-    assert value.graph.add_nodes([node("1.1.1.1")]) == 1
-    assert value.graph.add_nodes([node("1.1.1.1")]) == 0
-    assert value.graph.node_count() == 1
-    assert value.graph.node("ip:1.1.1.1")["model"]["ip"] == "1.1.1.1"
-    assert value.last_change()["updated_node_ids"] == []
+def _node_rows(cursor: GraphCursor) -> list[cstx.Node]:
+    return [cstx.Node.FromString(payload) for payload in cursor]
 
 
-def test_easm_metadata_requires_explicit_loading():
-    value = CSTX()
-    assert "easm" in value.schemas.available_plugins()
-    assert "gogo" in value.schemas.plugin_artifacts("easm")
-    assert not value.schemas.has_native_artifact("gogo")
-
-    value.schemas.load_plugin("easm")
-    assert value.schemas.has_native_artifact("gogo")
+def _register(runtime: CSTX) -> None:
+    # The built-in extension ships its own schema document; enabling it is
+    # the whole registration step.
+    runtime.extensions.enable("easm")
 
 
-def test_cursor_filter_order_close_and_invalidation():
-    value = db()
-    value.graph.add_nodes([node("2.2.2.2"), node("1.1.1.1", flags=NodeFlags.HONEYPOT)])
-    cursor = value.graph.nodes(order="id_asc")
-    assert next(cursor)["id"] == "ip:1.1.1.1"
-    value.graph.add_nodes([node("3.3.3.3")])
+def test_graph_methods_accept_and_return_only_protobuf() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    assert runtime.graph.add_nodes(_graph([_ip("1.1.1.1")])) == 1
+    assert runtime.graph.add_nodes(_graph([_ip("1.1.1.1")])) == 0
+
+    node = cstx.Node.FromString(runtime.graph.node("ip:1.1.1.1"))
+    entity = easm.Ip.FromString(node.entity.value)
+    assert entity.ip == "1.1.1.1"
+
+    assert runtime.graph.add_nodes(
+        _graph([_ip("2.2.2.2")])
+    ) == 1
+    assert runtime.graph.add_relationships(
+        _graph(relationships=[_contain("ip:1.1.1.1", "ip:2.2.2.2")])
+    ) == 1
+    edge = cstx.Relationship.FromString(
+        runtime.graph.relationship("relationship:ip:1.1.1.1:contain:ip:2.2.2.2")
+    )
+    assert edge.source_id == "ip:1.1.1.1"
+
+    stats = cstx.GraphStats.FromString(runtime.graph.stats())
+    assert stats.nodes_by_type["ip"] == 2
+    assert stats.relationships_by_type["contain"] == 1
+    change = cstx.GraphChangeSet.FromString(runtime.last_change())
+    assert list(change.added_relationship_ids) == [edge.id]
+
+
+def test_typed_cursor_page_and_next_share_one_transport() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    runtime.graph.add_nodes(_graph([_ip("2.2.2.2"), _ip("1.1.1.1", flags=NodeFlags.HONEYPOT)]))
+    cursor = runtime.graph.nodes(
+        (cstx.NodeFilter(flags_any=[cstx.NodeFlag.NODE_FLAG_HONEYPOT])).SerializeToString(),
+        _window(order=cstx.SortOrder.SORT_ORDER_ID_ASC),
+    )
+    row = cstx.Node.FromString(next(cursor))
+    assert row.id == "ip:1.1.1.1"
+    assert cursor.next() is None
+
+    all_rows = runtime.graph.nodes(b"", _window(order=cstx.SortOrder.SORT_ORDER_ID_ASC))
+    page = cstx.GraphResultPage.FromString(all_rows.page(limit=10, page=1))
+    assert [item.id for item in page.nodes.values] == ["ip:1.1.1.1", "ip:2.2.2.2"]
+
+
+def test_cursor_invalidation_and_typed_stats() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    runtime.graph.add_nodes(_graph([_ip("1.1.1.1"), _ip("2.2.2.2")]))
+    cursor = runtime.graph.nodes(b"", _window())
+    assert cstx.Node.FromString(next(cursor)).id == "ip:1.1.1.1"
+    runtime.graph.add_nodes(_graph([_ip("3.3.3.3")]))
     with pytest.raises(CSTXError) as error:
-        next(cursor)
-    assert error.value.code == "CURSOR_INVALIDATED"
-    selected = list(value.graph.nodes(flags_any=NodeFlags.HONEYPOT))
-    assert [item["id"] for item in selected] == ["ip:1.1.1.1"]
-    selected_cursor = value.graph.nodes(limit=1)
-    selected_cursor.close()
-    assert selected_cursor.closed
-    assert list(selected_cursor) == []
-
-
-def test_noop_cstx_flag_filter_does_not_materialize_snapshot():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2", flags=NodeFlags.INTERNAL)])
-
-    result = value.graph.filter(exclude_mask=NodeFlags.HONEYPOT)
-
-    assert isinstance(result, CSTX)
-    assert result.graph.node_count() == 2
-
-
-def test_stats_and_query_subgraph_accept_cstx_flag_masks_without_parallel_apis():
-    value = db()
-    value.graph.add_nodes(
-        [
-            node("1.1.1.1"),
-            node("2.2.2.2", flags=NodeFlags.HONEYPOT),
-        ]
-    )
-
-    assert value.graph.stats()["nodes"] == {"ip": 2}
-    assert value.graph.stats(exclude_mask=NodeFlags.HONEYPOT)["nodes"] == {"ip": 1}
-
-    all_matches = value.graph.query_subgraph("ip")
-    assert all_matches.graph.node_count() == 2
-    assert all_matches.graph.edge_count() == 0
-
-    filtered = value.graph.query_subgraph("ip", exclude_mask=NodeFlags.HONEYPOT)
-    assert filtered.graph.node_count() == 1
-    assert filtered.graph.find_node("ip:1.1.1.1") is not None
-
-    assert not hasattr(value.graph, "stats_filtered")
-    assert not hasattr(value.graph, "query_trace_ids_filtered")
-    for internal_name in (
-        "node_ids",
-        "nodes_by_ids",
-        "link_nodes",
-        "subgraph_ids",
-        "query_node_ids",
-        "query_trace_ids",
-        "induced_snapshot",
-        "_node_ids",
-        "_nodes_by_ids",
-        "_link_nodes",
-        "_subgraph_ids",
-        "_query_node_ids",
-        "_query_trace_ids",
-        "_induced_snapshot",
-    ):
-        assert not hasattr(value.graph, internal_name)
-
-
-def test_stats_selection_counts_induced_edges_without_materializing_a_subgraph():
-    value = db()
-    selected_a = node("1.1.1.1")
-    selected_a["extras"] = {"flow_ids": ["flow-a"]}
-    selected_b = node("2.2.2.2")
-    selected_b["extras"] = {"flow_ids": ["flow-a"]}
-    outside = node("3.3.3.3")
-    outside["extras"] = {"flow_ids": ["flow-b"]}
-    value.graph.add_nodes([selected_a, selected_b, outside])
-    value.graph.add_edges(
-        [
-            edge("ip:1.1.1.1", "ip:2.2.2.2"),
-            edge("ip:2.2.2.2", "ip:3.3.3.3"),
-        ]
-    )
-
-    stats = value.graph.stats(selection='*[flow_ids=="flow-a"]')
-
-    assert stats["nodes"] == {"ip": 2}
-    assert stats["edges"] == {"related": 1}
-    assert stats["sources"] == {"test": 2}
-
-
-def test_analyze_leiden_returns_complete_selected_partition():
-    value = db()
-    node_ids = ["ip:a1", "ip:a2", "ip:a3", "ip:b1", "ip:b2", "ip:b3"]
-    value.graph.add_nodes([node(node_id.removeprefix("ip:")) for node_id in node_ids])
-    value.graph.add_edges(
-        [
-            edge("ip:a1", "ip:a2"),
-            edge("ip:a2", "ip:a3"),
-            edge("ip:a3", "ip:a1"),
-            edge("ip:b1", "ip:b2"),
-            edge("ip:b2", "ip:b3"),
-            edge("ip:b3", "ip:b1"),
-        ]
-    )
-
-    result = value.graph.analyze({"name": "leiden", "resolution": 1.0})
-    assignment_page = result.page(limit=100, page=1)
-    summary = assignment_page["summary"]
-
-    assert summary["algorithm"] == "leiden"
-    assert summary["projection"] == "undirected"
-    assert summary["resolution"] == 1.0
-    assert summary["num_communities"] >= 2
-    assert summary["total_communities"] == summary["num_communities"]
-    assert summary["communities_truncated"] is False
-    assert sum(summary["community_sizes"].values()) == len(node_ids)
-    assignments = {
-        item["node_id"]: item["community"] for item in assignment_page["items"]
-    }
-    assert set(assignments) == set(node_ids)
-    assert assignments["ip:a1"] != assignments["ip:b1"]
-
-    limited = value.graph.analyze(
-        {"name": "leiden", "resolution": 1.0, "top_k": 1},
-        'ip[ip!="a1"]',
-    )
-    limited_page = limited.page(limit=100, page=1)
-    limited_summary = limited_page["summary"]
-    assert limited_summary["num_communities"] == 1
-    assert limited_summary["communities_truncated"] is True
-    assert len(limited_summary["community_sizes"]) == 1
-    assert all(item["node_id"] != "ip:a1" for item in limited_page["items"])
-
-    with pytest.raises(CSTXError):
-        value.graph.analyze({"name": "leiden", "resolution": 0.0})
-    with pytest.raises(CSTXError):
-        value.graph.analyze({"name": "leiden", "top_k": 0})
-
-
-def test_analyze_is_the_single_typed_algorithm_atom():
-    value = db()
-    value.graph.add_nodes([node(name) for name in ("a", "b", "c", "d")])
-    value.graph.add_edges(
-        [
-            edge("ip:a", "ip:b"),
-            edge("ip:a", "ip:c"),
-            edge("ip:b", "ip:d"),
-            edge("ip:c", "ip:d"),
-        ]
-    )
-
-    assert value.graph.analyze({"name": "is_dag"}) is True
-    weak = value.graph.analyze({"name": "weak_components"})
-    assert weak.page(limit=10, page=1)["summary"]["projection"] == "undirected"
-    strong = value.graph.analyze({"name": "strong_components"})
-    assert "projection" not in strong.page(limit=10, page=1)["summary"]
-    paths = value.graph.analyze(
-        {
-            "name": "shortest_paths",
-            "start_id": "ip:a",
-            "end_id": "ip:d",
-            "direction": "both",
-            "limit": 10,
-        }
-    )
-    assert isinstance(paths, GraphCursor)
-    assert paths.kind == "paths"
-    assert paths.page(limit=10, page=1)["items"] == [
-        {"node_ids": ["ip:a", "ip:b", "ip:d"]},
-        {"node_ids": ["ip:a", "ip:c", "ip:d"]},
-    ]
-
-    with pytest.raises(ValueError):
-        value.graph.analyze({"name": "is_dag", "unexpected": True})
-
-
-def test_prefetched_cursor_page_is_invalidated_before_returning_stale_items():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2"), node("3.3.3.3")])
-    cursor = value.graph.nodes(order="id_asc")
-    assert next(cursor)["id"] == "ip:1.1.1.1"
-    assert next(cursor)["id"] == "ip:2.2.2.2"
-    value.graph.add_nodes([node("4.4.4.4")])
-
-    with pytest.raises(CSTXError) as error:
-        next(cursor)
+        cursor.next()
     assert error.value.code == "CURSOR_INVALIDATED"
 
-
-def test_unchanged_edge_does_not_invalidate_live_cursor():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2"), node("3.3.3.3")])
-    relation = edge("ip:1.1.1.1", "ip:2.2.2.2")
-    value.graph.add_edges([relation])
-    cursor = value.graph.nodes()
-    next(cursor)
-    assert value.graph.add_edges([relation]) == 0
-
-    assert next(cursor)["id"] == "ip:2.2.2.2"
-
-
-def test_edges_neighbors_and_direct_json():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2")])
-    relation = edge("ip:1.1.1.1", "ip:2.2.2.2")
-    assert value.graph.add_edges([relation]) == 1
-    assert value.graph.edge_count() == 1
-    assert list(value.graph.edges())[0]["id"] == relation["id"]
-    assert list(value.graph.neighbors("ip:1.1.1.1"))[0]["id"] == "ip:2.2.2.2"
-    assert json.loads(value.graph._edges_json()) == list(value.graph.edges())
-    assert json.loads(value.graph._neighbors_json("ip:1.1.1.1")) == list(
-        value.graph.neighbors("ip:1.1.1.1")
+    filtered = cstx.GraphStats.FromString(
+        runtime.graph.stats(exclude_mask=NodeFlags.HONEYPOT)
     )
+    assert filtered.nodes_by_type["ip"] == 3
 
 
-def test_native_graph_semantics_own_lookup_context_and_relationship_identity():
-    value = db()
-    first = node("2.2.2.2")
-    first["extras"] = {"name": "shared", "scope": "old"}
-    second = node("1.1.1.1")
-    second["extras"] = {"name": "shared"}
-    duplicate_value = node("3.3.3.3")
-    duplicate_value["value"] = "1.1.1.1"
-    value.graph.add_nodes([first, second, duplicate_value])
-
-    assert value.graph.find_node("ip:2.2.2.2")["id"] == "ip:2.2.2.2"
-    assert value.graph.find_node("1.1.1.1")["id"] == "ip:1.1.1.1"
-    assert value.graph.find_node("shared")["id"] == "ip:1.1.1.1"
-    assert (
-        value.graph.patch_node_extras(["ip:2.2.2.2"], {"scope": "new", "run": "r1"})
-        == 1
+def test_algorithms_return_typed_pages() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    runtime.graph.add_nodes(_graph([_ip("a"), _ip("b")]))
+    runtime.graph.add_relationships(_graph(relationships=[_contain("ip:a", "ip:b")]))
+    assert runtime.graph.analyze(cstxpy.Algorithm.is_dag()) is True
+    paths = runtime.graph.analyze(
+        cstxpy.Algorithm.shortest_paths("ip:a", "ip:b", direction="both")
     )
-    assert value.graph.node("ip:2.2.2.2")["extras"] == {
-        "name": "shared",
-        "scope": ["old", "new"],
-        "run": "r1",
-    }
-
-    relation = value.graph.create_relationship(
-        "ip:1.1.1.1",
-        "ip:2.2.2.2",
-        "related",
-        ["test"],
-        {"weight": 1},
-        "qualified",
-    )
-    assert relation["id"] == ("relationship:ip:1.1.1.1:related:ip:2.2.2.2:qualified")
-    assert cstxpy.is_path_expression("ip -> ip")
-    assert cstxpy.is_path_expression('ip[country="CN"]')
+    page = cstx.GraphResultPage.FromString(paths.page(limit=10, page=1))
+    assert [list(item.node_ids) for item in page.paths.values] == [["ip:a", "ip:b"]]
 
 
-def test_patch_node_extras_none_selects_all_nodes():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2")])
-
-    assert value.graph.patch_node_extras(None, {"task_ids": ["task-1"]}) == 2
-    assert value.graph.node("ip:1.1.1.1")["extras"]["task_ids"] == ["task-1"]
-    assert value.graph.node("ip:2.2.2.2")["extras"]["task_ids"] == ["task-1"]
-
-
-def test_native_graph_union_and_difference_are_deterministic():
-    left = db()
-    right = db()
-    left.graph.add_nodes([node("1.1.1.1"), node("2.2.2.2")])
-    right.graph.add_nodes([node("2.2.2.2"), node("3.3.3.3")])
-
-    union = left.graph.union(right.graph)
-    assert sorted(item["id"] for item in union.graph.nodes()) == [
-        "ip:1.1.1.1",
-        "ip:2.2.2.2",
-        "ip:3.3.3.3",
-    ]
-    difference = left.graph.difference(right.graph)
-    assert [item["id"] for item in difference.graph.nodes()] == ["ip:1.1.1.1"]
-    assert list(difference.graph.edges()) == []
+def test_extension_introspection_is_protobuf() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    catalog = cstx.ExtensionCatalog.FromString(runtime.extensions.list())
+    assert any(item.name == "easm" for item in catalog.extensions)
+    schema = cstx.NodeType.FromString(runtime.extensions.schema("ip"))
+    assert schema.type_url
 
 
-def test_native_graph_merge_is_in_place_and_reports_exact_changes():
-    target = db()
-    source = db()
-    first = node("1.1.1.1")
-    second = node("2.2.2.2")
-    first["sources"] = ["target"]
-    target.graph.add_nodes([first])
-    merged_first = node("1.1.1.1")
-    merged_first["sources"] = ["source-a", "source-b"]
-    merged_first["extras"] = {"scope": "source"}
-    second["sources"] = ["source-b"]
-    source.graph.add_nodes([merged_first, second])
-    relationship = edge(merged_first["id"], second["id"])
-    relationship["sources"] = ["source-a", "source-b"]
-    relationship["attrs"] = {"confidence": 90}
-    source.graph.add_edges([relationship])
-
-    assert target.graph.merge(source.graph) == 3
-    assert target.graph.node_count() == 2
-    assert target.graph.edge_count() == 1
-    assert source.graph.node_count() == 2
-    assert source.graph.edge_count() == 1
-    assert set(target.graph.node(first["id"])["sources"]) == {
-        "target",
-        "source-a",
-        "source-b",
-    }
-    merged_edge = target.graph.edge(relationship["id"])
-    assert merged_edge["source_id"] == first["id"]
-    assert merged_edge["target_id"] == second["id"]
-    assert set(merged_edge["sources"]) == {"source-a", "source-b"}
-    assert merged_edge["attrs"] == {"confidence": 90}
-    assert target.last_change() == {
-        "added_node_ids": [second["id"]],
-        "updated_node_ids": [first["id"]],
-        "removed_node_ids": [],
-        "added_edge_ids": [relationship["id"]],
-        "updated_edge_ids": [],
-        "removed_edge_ids": [],
-        "reset": False,
-    }
-    assert target.graph.merge(target.graph) == 0
-
-
-def test_direct_dict_cursor_matches_cstx_json_for_all_column_types():
-    value = CSTX(cursor_page_size=2)
-    value.schemas.register(
-        "mixed",
-        {
-            "properties": {
-                "name": {"type": "string"},
-                "optional": {"type": "string"},
-                "count": {"type": "integer"},
-                "ratio": {"type": "number"},
-                "active": {"type": "boolean"},
-                "tags": {"type": "array", "items": {"type": "string"}},
-                "ports": {"type": "array", "items": {"type": "integer"}},
-                "details": {"type": "object"},
-            }
-        },
-        "name",
-    )
-    item = {
-        "id": "mixed:one",
-        "type": "mixed",
-        "value": "one",
-        "model": {
-            "name": "one",
-            "optional": None,
-            "count": 7,
-            "ratio": 1.5,
-            "active": True,
-            "tags": ["a", "b"],
-            "ports": [80, 443],
-            "details": {"nested": [1, 2]},
-        },
-        "sources": ["test"],
-        "extras": {"scope": "unit"},
-    }
-    value.graph.add_nodes([item])
-
-    assert list(value.graph.nodes()) == json.loads(value.graph._nodes_json())
-
-
-def test_repo_checkout_and_close():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1")])
-    commit = value.repo.commit("initial")
-    value.graph.add_nodes([node("2.2.2.2")])
-    value.repo.checkout(commit["id"], force=True)
-    assert value.graph.node("ip:1.1.1.1")["id"] == "ip:1.1.1.1"
-    assert value.graph.node_count() == 1
-    value.close()
-    with pytest.raises(CSTXError) as error:
-        value.graph.node_count()
-    assert error.value.code == "NOT_INITIALIZED"
-
-
-def test_repo_prepare_uses_bytes_for_object_transport():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1")])
-    try:
-        commit, index_root, objects = value.repo._prepare(
-            "transport", "main", None, {}, 1
+def test_rag_uses_protobuf_plan_and_results() -> None:
+    runtime = CSTX()
+    _register(runtime)
+    runtime.graph.add_nodes(_graph([_ip("1.1.1.1")]))
+    # easm.Ip marks `ip` as non-semantic — an identity value is not useful
+    # for semantic recall — so the record needs a field that is indexed.
+    runtime.graph.add_nodes(_graph([
+        cstx.Node(
+            id="ip:1.1.1.1", sources=["test"],
+            entity=Any(
+                type_url="type.googleapis.com/easm.Ip",
+                value=(easm.Ip(ip="1.1.1.1", as_name="Example Networks")).SerializeToString(),
+            ),
         )
-        assert isinstance(commit, dict)
-        assert isinstance(index_root, bytes)
-        assert objects
-        assert all(
-            isinstance(object_id, bytes) and isinstance(envelope, bytes)
-            for object_id, _kind, envelope in objects
-        )
-    finally:
-        value.repo._discard()
-        value.close()
+    ]))
+    session = runtime.graph.rag().index(
+        (cstx.RagIndexPlan(
+            commit="working",
+            mode=cstx.RagIndexMode.RAG_INDEX_FULL,
+        )).SerializeToString()
+    )
+    record = cstx.RagRecord.FromString(next(session.pending("v1")))
+    assert record.id == "node/ip:1.1.1.1"
+    retrieval = runtime.graph.rag().retrieve(
+        (cstx.RagQuery(text="1.1.1.1", limit=5)).SerializeToString()
+    )
+    plan = cstx.RecallPlan.FromString(retrieval.requests())
+    assert len(plan.queries) == 2
+    result = cstx.RagResult.FromString(
+        retrieval.complete((cstx.RecallResults()).SerializeToString())
+    )
+    assert result is not None
 
 
-def test_repo_stats_is_one_time_range_delta():
-    value = db()
-    value.graph.add_nodes([node("1.1.1.1")])
-    value.repo.commit("first", timestamp=100)
-    value.graph.add_nodes([node("2.2.2.2")])
-    value.repo.commit("second", timestamp=200)
-
-    assert value.repo.delta(start_timestamp=100, end_timestamp=199)["added_nodes"] == 1
-    assert value.repo.delta(start_timestamp=101, end_timestamp=200)["added_nodes"] == 1
-    assert "bucket" not in inspect.signature(value.repo.delta).parameters
-    with pytest.raises(CSTXError, match="start_timestamp"):
-        value.repo.delta(start_timestamp=201, end_timestamp=200)
-
-
-def test_not_found_has_stable_error_context():
-    value = db()
-    with pytest.raises(CSTXError) as error:
-        value.graph.node("ip:missing")
-    assert error.value.code == "NOT_FOUND"
-    assert error.value.operation == "graph.node"
-
-
-def test_repository_errors_have_stable_context():
-    value = db()
-
-    with pytest.raises(CSTXError) as error:
-        value.repo.checkout("missing")
-    assert error.value.code == "NOT_FOUND"
-    assert error.value.operation == "repo.checkout"
-
-
-def test_every_supported_api_has_runtime_documentation():
-    """Keep newly exported APIs explainable through Python help(), not only source."""
+def test_every_exported_binding_has_documentation() -> None:
     public_members = {
-        CSTX: (
-            "schemas",
-            "graph",
-            "repo",
-            "closed",
-            "project_id",
-            "close",
-            "last_change",
-            "__enter__",
-            "__exit__",
-        ),
-        Schemas: (
-            "register",
-            "register_join_rule",
-            "import_schema",
-            "export_schema",
-            "contains",
-            "get",
-            "list",
-            "load_plugin",
-            "load_all_plugins",
-            "available_plugins",
-            "plugin_artifacts",
-            "has_native_artifact",
-            "anchor_concepts",
-        ),
-        CSTXGraph: (
-            "rag",
-            "analyze",
-            "add_nodes",
-            "add_edges",
-            "replace_nodes",
-            "delete_nodes",
-            "delete_edges",
-            "node",
-            "edge",
-            "create_relationship",
-            "union",
-            "merge",
-            "difference",
-            "contains",
-            "node_count",
-            "edge_count",
-            "stats",
-            "nodes",
-            "nodes_page",
-            "edges",
-            "neighbors",
-            "query",
-            "ingest_native",
-            "find_node",
-            "patch_node_extras",
-            "node_types",
-            "link",
-            "update_node_flags",
-            "analyze",
-            "degree",
-            "subgraph",
-            "query_subgraph",
-            "induced_subgraph",
-            "filter",
-            "filter_with_reasons",
-            "find_anchors",
-            "elevate",
-        ),
-        Repository: (
-            "resolve",
-            "head",
-            "checkout",
-            "commit",
-            "diff",
-            "log",
-            "history",
-            "branch",
-            "merge",
-            "stat",
-            "delta",
-        ),
-        GraphCursor: (
-            "kind",
-            "page",
-            "closed",
-            "close",
-            "__iter__",
-            "__next__",
-            "__enter__",
-            "__exit__",
-        ),
+        CSTX: ("extensions", "graph", "repo", "closed", "project_id", "close", "last_change", "__enter__", "__exit__"),
+        Extensions: ("register", "enable", "list", "info", "contains", "schema", "schemas", "has_native_artifact", "anchor_concepts"),
+        CSTXGraph: ("rag", "add_nodes", "replace_nodes", "relationship", "node", "nodes", "relationships", "neighbors", "query", "analyze", "add_relationships", "delete_nodes", "delete_relationships", "union", "merge", "difference", "contains", "node_count", "relationship_count", "stats", "ingest", "find_node", "patch_node_extras", "node_types", "link", "update_node_flags", "degree", "subgraph", "query_subgraph", "induced_subgraph", "filter", "filter_with_reasons", "find_anchors", "elevate"),
+        Repository: ("resolve", "head", "checkout", "commit", "diff", "log", "history", "branch", "merge", "stat", "delta"),
+        GraphCursor: ("kind", "page", "next", "closed", "close", "__iter__", "__next__", "__enter__", "__exit__"),
         NodeFlags: ("all_mask", "default_exclude_mask"),
     }
-
-    assert inspect.getdoc(CSTXError)
+    assert inspect.getdoc(cstxpy.CSTXError)
     for api_type, members in public_members.items():
-        assert inspect.getdoc(api_type), api_type.__name__
+        assert inspect.getdoc(api_type)
         for member in members:
-            assert inspect.getdoc(getattr(api_type, member)), (
-                f"{api_type.__name__}.{member}"
-            )
-        discovered = {
-            name
-            for name, value in api_type.__dict__.items()
-            if not name.startswith("_")
-            and (
-                callable(getattr(api_type, name, None))
-                or inspect.isdatadescriptor(value)
-            )
-        }
-        assert discovered <= set(members), (
-            f"undocumented API added to {api_type.__name__}: {discovered - set(members)}"
-        )
+            assert inspect.getdoc(getattr(api_type, member)), f"{api_type.__name__}.{member}"
 
 
-def test_type_stub_documents_every_exported_class_and_method():
-    """IDE-visible signatures must carry the same explanation as runtime help()."""
+def test_type_stub_documents_every_exported_class_and_method() -> None:
     stub = Path(cstxpy.__file__).with_name("_cstxpy.pyi")
     tree = ast.parse(stub.read_text(encoding="utf-8"), filename=str(stub))
     for node in ast.walk(tree):

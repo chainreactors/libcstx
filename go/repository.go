@@ -1,6 +1,11 @@
 package cstx
 
-import "context"
+import (
+	"context"
+
+	"github.com/chainreactors/libcstx/go/proto/cstxproto"
+	"google.golang.org/protobuf/types/known/structpb"
+)
 
 // Repository is the Git-like version namespace of one CSTX working tree.
 type Repository struct{ eng engine }
@@ -19,9 +24,9 @@ func (r *Repository) Head(ctx context.Context, refName string) (*string, error) 
 	return r.eng.repoHead(ctx, refName)
 }
 
-func (r *Repository) Checkout(ctx context.Context, revision string, force bool) (Commit, error) {
+func (r *Repository) Checkout(ctx context.Context, revision string, force bool) (*cstxproto.Commit, error) {
 	if err := contextError(ctx); err != nil {
-		return Commit{}, err
+		return nil, err
 	}
 	return r.eng.repoCheckout(ctx, revision, force)
 }
@@ -31,10 +36,10 @@ func (r *Repository) Commit(
 	message string,
 	refName string,
 	expectedHead *string,
-	metadata any,
-) (Commit, error) {
+	metadata *structpb.Struct,
+) (*cstxproto.Commit, error) {
 	if err := contextError(ctx); err != nil {
-		return Commit{}, err
+		return nil, err
 	}
 	return r.eng.repoCommit(ctx, message, refName, expectedHead, metadata)
 }
@@ -47,11 +52,11 @@ func (r *Repository) Prepare(
 	message string,
 	refName string,
 	expectedHead *string,
-	metadata any,
+	metadata *structpb.Struct,
 	timestamp *int64,
-) (PreparedCommit, error) {
+) (*cstxproto.PublicationPlan, error) {
 	if err := contextError(ctx); err != nil {
-		return PreparedCommit{}, err
+		return nil, err
 	}
 	return r.eng.repoPrepare(ctx, message, refName, expectedHead, metadata, timestamp)
 }
@@ -74,7 +79,7 @@ func (r *Repository) Discard(ctx context.Context) error {
 
 // Synchronize loads externally persisted objects, refs, and index roots into
 // this computation session.
-func (r *Repository) Synchronize(ctx context.Context, state RepositorySync) error {
+func (r *Repository) Synchronize(ctx context.Context, state *cstxproto.RepositoryState) error {
 	if err := contextError(ctx); err != nil {
 		return err
 	}
@@ -88,89 +93,12 @@ func (r *Repository) Contains(ctx context.Context, object string) (bool, error) 
 	return r.eng.repoContains(ctx, object)
 }
 
-// MissingTree plans immutable object reads required to materialize a commit.
-func (r *Repository) MissingTree(ctx context.Context, commit string) ([]string, error) {
+// Missing plans immutable object reads for one repository operation.
+func (r *Repository) Missing(ctx context.Context, plan *cstxproto.RepositoryObjectPlan) (*cstxproto.ObjectSelection, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
-	return r.eng.repoMissingTree(ctx, commit)
-}
-
-// ObjectClosure returns every object one commit and its ancestry are built
-// from. Deleting whatever the union of this set over every ref does not name
-// reclaims space without breaking any supported operation on those refs.
-//
-// It answers from stored bytes, so unlike the Missing* planners the result does
-// not depend on what this process has already loaded.
-func (r *Repository) ObjectClosure(ctx context.Context, commit string) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoObjectClosure(ctx, commit)
-}
-
-// MissingPrepare plans index reads required before preparing a child commit.
-func (r *Repository) MissingPrepare(ctx context.Context, commit string) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingPrepare(ctx, commit)
-}
-
-// MissingHistory plans the index reads required to answer History for one
-// entity. A host that keeps objects outside the runtime resolves this to empty
-// before calling History; the index only pages in the postings for that entity,
-// so the walk costs what the entity changed, not what the range contains.
-func (r *Repository) MissingHistory(ctx context.Context, commit, entity string) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingHistory(ctx, commit, entity)
-}
-
-// MissingStat plans the reads required to summarize a commit.
-func (r *Repository) MissingStat(ctx context.Context, commit string) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingStat(ctx, commit)
-}
-
-// MissingCommits plans the reads required to walk a commit's ancestry.
-func (r *Repository) MissingCommits(ctx context.Context, commit string, limit int) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingCommits(ctx, commit, limit)
-}
-
-// MissingDiff plans the reads required to diff two revisions at one detail
-// level. A limit never narrows the plan, so it is not part of the request.
-func (r *Repository) MissingDiff(ctx context.Context, base, head string, detail DiffDetail) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	if detail == "" {
-		detail = DiffEntities
-	}
-	return r.eng.repoMissingDiff(ctx, base, head, detail)
-}
-
-// MissingDelta plans the reads required to count changes in a time range.
-func (r *Repository) MissingDelta(ctx context.Context, commit string, start, end *int64) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingDelta(ctx, commit, start, end)
-}
-
-// MissingMerge plans the reads required to merge source into target. An empty
-// target means the current head.
-func (r *Repository) MissingMerge(ctx context.Context, source, target string) ([]string, error) {
-	if err := contextError(ctx); err != nil {
-		return nil, err
-	}
-	return r.eng.repoMissingMerge(ctx, source, target)
+	return r.eng.repoMissing(ctx, plan)
 }
 
 // ReleaseTransientObjects drops objects hydrated for one external operation.
@@ -188,31 +116,24 @@ func (r *Repository) Diff(
 	ctx context.Context,
 	base string,
 	head string,
-	options DiffOptions,
-) (GraphDiff, error) {
+	limit *uint64,
+	detail cstxproto.DiffDetail,
+) (*cstxproto.GraphDiff, error) {
 	if err := contextError(ctx); err != nil {
-		return GraphDiff{}, err
+		return nil, err
 	}
-	return r.eng.repoDiff(ctx, base, head, options)
+	return r.eng.repoDiff(ctx, base, head, limit, detail)
 }
 
 func (r *Repository) Log(
 	ctx context.Context,
 	revision string,
 	limit int,
-) ([]map[string]any, error) {
+) (*cstxproto.CommitLog, error) {
 	if err := contextError(ctx); err != nil {
 		return nil, err
 	}
 	return r.eng.repoLog(ctx, revision, limit)
-}
-
-// History is a structured, replayable result for one entity at a revision.
-type History struct {
-	EntityID string
-	Revision string
-	Limit    *int
-	Entries  []map[string]any
 }
 
 func (r *Repository) History(
@@ -220,17 +141,11 @@ func (r *Repository) History(
 	entityID string,
 	revision string,
 	limit *int,
-) (History, error) {
+) (*cstxproto.EntityHistory, error) {
 	if err := contextError(ctx); err != nil {
-		return History{}, err
+		return nil, err
 	}
-	entries, err := r.eng.repoHistory(ctx, entityID, revision, limit)
-	return History{
-		EntityID: entityID,
-		Revision: revision,
-		Limit:    limit,
-		Entries:  entries,
-	}, err
+	return r.eng.repoHistory(ctx, entityID, revision, limit)
 }
 
 func (r *Repository) Branch(ctx context.Context, name, startPoint string) (string, error) {
@@ -246,9 +161,9 @@ func (r *Repository) Merge(
 	target string,
 	expectedHead *string,
 	message *string,
-) (Commit, error) {
+) (*cstxproto.Commit, error) {
 	if err := contextError(ctx); err != nil {
-		return Commit{}, err
+		return nil, err
 	}
 	return r.eng.repoMerge(ctx, source, target, expectedHead, message)
 }
@@ -258,9 +173,9 @@ func (r *Repository) Stat(
 	revision string,
 	excludeMask uint64,
 	includeMask uint64,
-) (GraphStats, error) {
+) (*cstxproto.GraphStats, error) {
 	if err := contextError(ctx); err != nil {
-		return GraphStats{}, err
+		return nil, err
 	}
 	return r.eng.repoStat(ctx, revision, excludeMask, includeMask)
 }
@@ -270,9 +185,9 @@ func (r *Repository) Delta(
 	revision string,
 	startTimestamp *int64,
 	endTimestamp *int64,
-) (Delta, error) {
+) (*cstxproto.GraphChangeSummary, error) {
 	if err := contextError(ctx); err != nil {
-		return Delta{}, err
+		return nil, err
 	}
 	return r.eng.repoDelta(ctx, revision, startTimestamp, endTimestamp)
 }
