@@ -2,23 +2,12 @@ package cstx
 
 import "github.com/chainreactors/libcstx/go/proto/cstxproto"
 
-// NodeFlags are engine-compatible scalar masks used by APIs that accept flag
-// masks directly. Structured graph values use cstxproto.NodeFlag.
-const (
-	FlagNone               uint64 = 0
-	FlagHoneypot           uint64 = 1 << 0
-	FlagNoise              uint64 = 1 << 1
-	FlagFalsePositive      uint64 = 1 << 2
-	FlagManualIgnored      uint64 = 1 << 3
-	FlagThreatPresent      uint64 = 1 << 4
-	FlagHistoricVulnerable uint64 = 1 << 5
-	FlagInternal           uint64 = 1 << 6
-)
-
-const FlagsAllMask uint64 = FlagHoneypot | FlagNoise | FlagFalsePositive |
-	FlagManualIgnored | FlagThreatPresent | FlagHistoricVulnerable | FlagInternal
-
-const FlagsDefaultExcludeMask uint64 = FlagHoneypot | FlagNoise | FlagFalsePositive | FlagManualIgnored
+// FlagNone is the empty mask. Every other flag bit is *declared by an
+// extension*, not by this SDK: a bit's meaning lives in
+// `<extension>.schema.json`, and hard-coding one product's seven security
+// words here was the same violation the `NodeFlag` enum was on the wire.
+// Read the declarations with FlagRegistry (flags.go).
+const FlagNone uint64 = 0
 
 // Affected returns the number of graph entities changed by a generated
 // protobuf change set. It is a function instead of a shadow SDK struct method.

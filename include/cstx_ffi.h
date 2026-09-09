@@ -132,10 +132,10 @@ CstxStatusCode cstx_extension_schemas(struct CstxHandle *handle,
 /**
  * Test whether an enabled native extension provides an artifact parser.
  */
-CstxStatusCode cstx_extension_has_native_artifact(struct CstxHandle *handle,
-                                                  struct CstxSlice artifact,
-                                                  uint8_t *output,
-                                                  struct CstxBuffer *error);
+CstxStatusCode cstx_extension_parses_artifact(struct CstxHandle *handle,
+                                              struct CstxSlice artifact,
+                                              uint8_t *output,
+                                              struct CstxBuffer *error);
 
 CstxStatusCode cstx_extension_anchor_concepts(struct CstxHandle *handle,
                                               struct CstxBuffer *output,
@@ -236,11 +236,6 @@ CstxStatusCode cstx_graph_query(struct CstxHandle *handle,
                                 struct CstxGraphCursor **output,
                                 struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_ingest(struct CstxHandle *handle,
-                                 struct CstxSlice request,
-                                 struct CstxBuffer *output,
-                                 struct CstxBuffer *error);
-
 /**
  * Resolve an identifier and return the matching node as protobuf.
  */
@@ -249,10 +244,10 @@ CstxStatusCode cstx_graph_find_node(struct CstxHandle *handle,
                                     struct CstxBuffer *output,
                                     struct CstxBuffer *error);
 
-CstxStatusCode cstx_graph_patch_node_extras(struct CstxHandle *handle,
-                                            struct CstxSlice request,
-                                            uint64_t *affected,
-                                            struct CstxBuffer *error);
+CstxStatusCode cstx_graph_patch_node_annotations(struct CstxHandle *handle,
+                                                 struct CstxSlice request,
+                                                 uint64_t *affected,
+                                                 struct CstxBuffer *error);
 
 CstxStatusCode cstx_graph_add_relationship(struct CstxHandle *handle,
                                            struct CstxSlice request_bytes,
@@ -447,6 +442,19 @@ CstxStatusCode cstx_repo_history(struct CstxHandle *handle,
                                  uint8_t has_limit,
                                  struct CstxBuffer *output,
                                  struct CstxBuffer *error);
+
+/**
+ * Read entity records at one revision and return a `Graph` in `output`.
+ *
+ * The selection's node and relationship ids are one set; the engine tells them
+ * apart by the `relationship:` prefix, as `history` does. Entities that are not
+ * live at `revision` are absent from the returned graph.
+ */
+CstxStatusCode cstx_repo_entities(struct CstxHandle *handle,
+                                  struct CstxSlice revision,
+                                  struct CstxSlice selection_bytes,
+                                  struct CstxBuffer *output,
+                                  struct CstxBuffer *error);
 
 /**
  * Create a ref and return the target UTF-8 commit id in `output`.

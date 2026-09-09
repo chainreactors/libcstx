@@ -10,18 +10,16 @@ import (
 
 // NodeValues is one node's payload as field names and Go values.
 //
-// It is the shape a caller uses when it has no generated message type for the
-// node — which is every type an extension declares at runtime, since no code
-// generator ran for it. The runtime encodes and decodes it with the schema
-// document that extension registered, so nothing here needs a field number.
+// The untyped shape, for a caller with no generated code for the node — which
+// is every type an extension declares at runtime, since no code generator ran
+// for it. `plugins/<extension>` carries the typed shape for extensions that did
+// run one; both produce the same payload, and neither needs a field number.
 type NodeValues map[string]any
 
 // AddNodeValues writes one node from field names and values.
 //
-// The counterpart to AddNodes for callers without generated types. Identity
-// comes from the schema document exactly as it does for a generated message,
-// so a node written this way lands on the same id as the same content written
-// as an Any.
+// Identity comes from the schema document, so a node written this way lands on
+// the same id as the same content written through a generated typed struct.
 func (g *Graph) AddNodeValues(ctx context.Context, nodeType string, values NodeValues, options ...NodeValueOption) (uint64, error) {
 	node, err := ValueNode(nodeType, values, options...)
 	if err != nil {
@@ -95,17 +93,11 @@ func EntityValue(nodeType string, values NodeValues) (*cstxproto.EntityValue, er
 	return &cstxproto.EntityValue{NodeType: nodeType, Fields: fields}, nil
 }
 
-// FieldValues reads a value-shaped payload back into a field map.
-//
-// Returns an error when the node came back as an Any, which means the runtime
-// was opened with the entity payload format.
+// FieldValues reads a payload back into a field map.
 func FieldValues(node *cstxproto.Node) (string, NodeValues, error) {
 	entity := node.GetValue()
 	if entity == nil {
-		return "", nil, fmt.Errorf(
-			"cstx: node %q carries no value payload; open the runtime with PayloadFormat_PAYLOAD_FORMAT_VALUE",
-			node.GetId(),
-		)
+		return "", nil, fmt.Errorf("cstx: node %q carries no payload", node.GetId())
 	}
 	values := make(NodeValues, len(entity.GetFields()))
 	for _, field := range entity.GetFields() {

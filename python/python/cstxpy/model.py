@@ -7,6 +7,15 @@ registers a schema at runtime gets model bases on exactly the same terms as
 the built-in one — and, since a node's payload crosses the boundary named by
 that same schema, its models serialize on the same terms too.
 
+:func:`base_model` is the only place a base is built. An extension that ran
+``make codegen`` additionally ships two generated files — a module binding its
+names and a ``.pyi`` declaring what they hold — but neither declares a class:
+the module calls straight back into here, and the stub is a static shadow with
+no runtime existence. That is the difference between giving a checker something
+to read and having two producers of one class. ``cstx``'s
+``test_stub_matches_the_runtime_model`` compares the shadow to what this module
+builds, field by field.
+
 protobuf is not involved here. ``cstxpy.proto`` carries the generated messages
 used to serialize, and nothing in this module imports them.
 """
@@ -127,7 +136,13 @@ def _index() -> Dict[str, str]:
 
 
 def __getattr__(name: str) -> Type[BaseModel]:
-    """Resolve ``DomainBase`` and friends without generating a module of stubs."""
+    """Resolve ``DomainBase`` and friends for an extension with no generated module.
+
+    A dynamic name, so a static checker sees nothing here — which is why an
+    extension that runs codegen imports from its own generated module instead.
+    Both spellings end at :func:`base_model`; this one is what an extension that
+    registered its schema at runtime has, and it must keep working.
+    """
     node_type = _index().get(name)
     if node_type is None:
         raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

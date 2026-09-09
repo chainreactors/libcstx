@@ -19,9 +19,9 @@ export class Extensions {
     anchorConcepts(): any;
     contains(node_type: string): boolean;
     enable(name: string): void;
-    hasNativeArtifact(artifact: string): boolean;
     info(name: string): any;
     list(): any;
+    parsesArtifact(artifact: string): boolean;
     register(contract: any): void;
     schema(node_type: string): any;
     schemas(): any;
@@ -33,13 +33,13 @@ export class Graph {
     [Symbol.dispose](): void;
     addNode(node: any): bigint;
     addNodes(nodes: any): bigint;
+    addRelationship(source_id: string, target_id: string, relation: string, sources?: string[] | null, model?: any | null, identity_key?: string | null): any;
     addRelationships(relationships: any): bigint;
     /**
      * Execute the single typed graph algorithm atom.
      */
     analyze(algorithm: any, selection?: string | null): any;
     contains(node_id: string): boolean;
-    createRelationship(source_id: string, target_id: string, relation: string, sources?: string[] | null, attrs?: any | null, identity_key?: string | null): any;
     degree(node_id: string, direction?: string | null): bigint;
     difference(other: Graph, node_type?: string | null): CSTX;
     elevate(concept_name: string): CSTX;
@@ -47,7 +47,6 @@ export class Graph {
     findAnchors(concept_name: string): any;
     findNode(identifier: string): any;
     inducedSubgraph(node_ids: string[], edge_ids?: string[] | null): CSTX;
-    ingest(plugin: string, artifact: string, data: Uint8Array): any;
     link(node_ids: string[], data_source: string): any;
     merge(other: Graph): bigint;
     neighbors(node_id: string, direction?: string | null, options?: any | null): GraphCursor;
@@ -55,7 +54,7 @@ export class Graph {
     nodeCount(): bigint;
     nodeTypes(): any;
     nodes(options?: any | null): GraphCursor;
-    patchNodeExtras(node_ids: string[] | null | undefined, patch: any): bigint;
+    patchNodeAnnotations(node_ids: string[] | null | undefined, patch: any): bigint;
     query(expression: string, options?: any | null): GraphCursor;
     querySubgraph(expression: string, limit?: number | null, page?: number | null, exclude_mask?: bigint | null, include_mask?: bigint | null): CSTX;
     relationship(relationship_id: string): any;
@@ -117,17 +116,16 @@ export interface InitOutput {
     readonly extensions_contains: (a: number, b: number, c: number, d: number) => void;
     readonly extensions_schema: (a: number, b: number, c: number, d: number) => void;
     readonly extensions_schemas: (a: number, b: number) => void;
-    readonly extensions_hasNativeArtifact: (a: number, b: number, c: number, d: number) => void;
+    readonly extensions_parsesArtifact: (a: number, b: number, c: number, d: number) => void;
     readonly extensions_anchorConcepts: (a: number, b: number) => void;
     readonly graph_addNode: (a: number, b: number, c: number) => void;
     readonly graph_addNodes: (a: number, b: number, c: number) => void;
     readonly graph_addRelationships: (a: number, b: number, c: number) => void;
-    readonly graph_ingest: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly graph_node: (a: number, b: number, c: number, d: number) => void;
     readonly graph_relationship: (a: number, b: number, c: number, d: number) => void;
     readonly graph_findNode: (a: number, b: number, c: number, d: number) => void;
-    readonly graph_patchNodeExtras: (a: number, b: number, c: number, d: number, e: number) => void;
-    readonly graph_createRelationship: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
+    readonly graph_addRelationship: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number, i: number, j: number, k: number, l: number, m: number) => void;
+    readonly graph_patchNodeAnnotations: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly graph_union: (a: number, b: number, c: number) => void;
     readonly graph_merge: (a: number, b: number, c: number) => void;
     readonly graph_difference: (a: number, b: number, c: number, d: number, e: number) => void;

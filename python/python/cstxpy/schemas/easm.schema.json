@@ -26,7 +26,8 @@
         { "name": "mx", "number": 8, "type": "string", "repeated": true, "optional": false, "semantic": false, "semantic_label": "mx" },
         { "name": "ns", "number": 9, "type": "string", "repeated": true, "optional": false, "semantic": false, "semantic_label": "ns" },
         { "name": "txt", "number": 10, "type": "string", "repeated": true, "optional": false, "semantic": false, "semantic_label": "txt" },
-        { "name": "extra", "number": 11, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extra", "column": "json" }
+        { "name": "extra", "number": 11, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extra", "column": "json" },
+        { "name": "root_domain", "number": 12, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "root_domain", "compute": { "from": "host", "apply": "root_domain" } }
       ]
     },
     "ip": {
@@ -45,7 +46,8 @@
         { "name": "cdn", "number": 9, "type": "bool", "repeated": false, "optional": true, "semantic": false, "semantic_label": "cdn" },
         { "name": "cloud", "number": 10, "type": "bool", "repeated": false, "optional": true, "semantic": false, "semantic_label": "cloud" },
         { "name": "waf", "number": 11, "type": "bool", "repeated": false, "optional": true, "semantic": false, "semantic_label": "waf" },
-        { "name": "extra", "number": 12, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extra", "column": "json" }
+        { "name": "extra", "number": 12, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extra", "column": "json" },
+        { "name": "cidr", "number": 13, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "cidr", "compute": { "from": "ip", "apply": "cidr" } }
       ]
     },
     "cidr": {
@@ -305,20 +307,110 @@
     }
   },
   "relations": {
-    "vuln": { "message": "easm.Vuln" },
-    "resolve": { "message": "easm.Resolve" },
-    "open": { "message": "easm.Open" },
-    "has-subdomain": { "message": "easm.HasSubdomain" },
-    "contain": { "message": "easm.Contain" },
-    "hosts": { "message": "easm.Hosts" },
-    "uses": { "message": "easm.Uses" },
-    "refers": { "message": "easm.Refers" },
-    "secured_by": { "message": "easm.SecuredBy" },
-    "exploit": { "message": "easm.Exploit" },
-    "affect": { "message": "easm.Affect" },
-    "invest": { "message": "easm.Invest" },
-    "own": { "message": "easm.Own" },
-    "filed-for": { "message": "easm.FiledFor" }
+    "vuln": {
+      "message": "easm.Vuln",
+      "fields": [
+        { "name": "value", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": false, "semantic_label": "value" },
+        { "name": "vuln_id", "number": 2, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "vuln_id" },
+        { "name": "name", "number": 3, "type": "string", "repeated": false, "optional": true, "semantic": true, "semantic_label": "name" },
+        { "name": "asset_id", "number": 4, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "asset_id" },
+        { "name": "severity", "number": 5, "type": "string", "repeated": false, "optional": true, "semantic": true, "semantic_label": "severity", "ordered_values": ["unknown", "info", "low", "medium", "high", "critical"] },
+        { "name": "tags", "number": 6, "type": "string", "repeated": true, "optional": false, "semantic": true, "semantic_label": "tags" },
+        { "name": "ip", "number": 7, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "ip" },
+        { "name": "host", "number": 8, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "host" },
+        { "name": "port", "number": 9, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "port" },
+        { "name": "protocol", "number": 10, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "protocol" },
+        { "name": "scheme", "number": 11, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "scheme" },
+        { "name": "url", "number": 12, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "url" },
+        { "name": "path", "number": 13, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "path" },
+        { "name": "pocname", "number": 14, "type": "string", "repeated": false, "optional": true, "semantic": true, "semantic_label": "pocname" },
+        { "name": "request", "number": 15, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "request" },
+        { "name": "response", "number": 16, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "response" },
+        { "name": "username", "number": 17, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "username" },
+        { "name": "password", "number": 18, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "password" },
+        { "name": "matched", "number": 19, "type": "bool", "repeated": false, "optional": true, "semantic": false, "semantic_label": "matched" },
+        { "name": "extracted", "number": 20, "type": "bool", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extracted" },
+        { "name": "extra", "number": 21, "type": "string", "repeated": false, "optional": true, "semantic": false, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "resolve": {
+      "message": "easm.Resolve",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "open": {
+      "message": "easm.Open",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "has-subdomain": {
+      "message": "easm.HasSubdomain",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "contain": {
+      "message": "easm.Contain",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "hosts": {
+      "message": "easm.Hosts",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "uses": {
+      "message": "easm.Uses",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "refers": {
+      "message": "easm.Refers",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "secured_by": {
+      "message": "easm.SecuredBy",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "exploit": {
+      "message": "easm.Exploit",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "affect": {
+      "message": "easm.Affect",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "invest": {
+      "message": "easm.Invest",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "own": {
+      "message": "easm.Own",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    },
+    "filed-for": {
+      "message": "easm.FiledFor",
+      "fields": [
+        { "name": "extra", "number": 1, "type": "string", "repeated": false, "optional": false, "semantic": true, "semantic_label": "extra", "column": "json" }
+      ]
+    }
   },
   "flags": {
     "honeypot": { "bit": 0, "default_exclude": true },

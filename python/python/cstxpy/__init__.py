@@ -17,7 +17,7 @@ from cstxpy._cstxpy import (
     is_path_expression,
 )
 from cstxpy.flags import NodeFlags
-from . import easmproto, proto
+from . import proto
 
 __all__ = [
     "CSTX",
@@ -36,5 +36,4 @@ __all__ = [
     "is_path_expression",
     "__version__",
     "proto",
-    "easmproto",
 ]

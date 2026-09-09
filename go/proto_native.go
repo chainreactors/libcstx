@@ -53,6 +53,29 @@ func (e *nativeEngine) graphAddRelationshipsWire(_ context.Context, graph *cstxp
 	})
 }
 
+func (e *nativeEngine) graphAddRelationshipWire(_ context.Context, relationship *cstxproto.Relationship) (cstxproto.Relationship, error) {
+	if relationship == nil {
+		return cstxproto.Relationship{}, &Error{Code: CodeInvalidArgument, Operation: "graph.add_relationship", Message: "relationship must not be nil"}
+	}
+	payload, err := proto.Marshal(relationship)
+	if err != nil {
+		return cstxproto.Relationship{}, err
+	}
+	data, err := bufferResult("graph.add_relationship", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_add_relationship(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+	if err != nil {
+		return cstxproto.Relationship{}, err
+	}
+	var stored cstxproto.Relationship
+	if err := proto.Unmarshal(data, &stored); err != nil {
+		return cstxproto.Relationship{}, fmt.Errorf("cstx: decode relationship protobuf: %w", err)
+	}
+	return stored, nil
+}
+
 func (e *nativeEngine) graphNodeWire(_ context.Context, nodeID string) (cstxproto.Node, error) {
 	data, err := bufferResult("graph.node", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
 		rc := C.cstx_graph_node(e.handle, stringSlice(nodeID), out, errBuf)

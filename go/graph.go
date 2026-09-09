@@ -24,7 +24,7 @@ func (g *Graph) AddNodes(ctx context.Context, nodes []*cstxproto.Node) (uint64, 
 // number of elements actually changed.
 //
 // AddNodes merges: fields fill in, sources accumulate, and two different values
-// under one extras key are kept as both. That is what aggregating sightings of
+// under one annotations key are kept as both. That is what aggregating sightings of
 // one entity needs. ReplaceNodes is for records that have a current value — an
 // oracle that moved from "future" to "intent" has one status — where merging
 // would silently keep the old value alongside the new one. Restating an
@@ -44,6 +44,18 @@ func (g *Graph) AddRelationships(ctx context.Context, relationships []*cstxproto
 	return g.eng.graphAddRelationships(ctx, relationships)
 }
 
+// AddRelationship adds or merges one generated protobuf relationship and
+// returns its canonical stored representation.
+func (g *Graph) AddRelationship(ctx context.Context, relationship *cstxproto.Relationship) (*cstxproto.Relationship, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	if relationship == nil {
+		return nil, &Error{Code: CodeInvalidArgument, Operation: "graph.add_relationship", Message: "relationship must not be nil"}
+	}
+	return g.eng.graphAddRelationship(ctx, relationship)
+}
+
 // DeleteNodes atomically removes nodes and all incident relationships.
 func (g *Graph) DeleteNodes(ctx context.Context, nodeIDs []string) (uint64, error) {
 	if err := contextError(ctx); err != nil {
@@ -58,15 +70,6 @@ func (g *Graph) DeleteRelationships(ctx context.Context, relationshipIDs []strin
 		return 0, err
 	}
 	return g.eng.graphDeleteRelationships(ctx, relationshipIDs)
-}
-
-// Ingest parses one artifact through a registered plugin. The raw parser bytes
-// are nested in ParserPayload and cross the FFI only as protobuf.
-func (g *Graph) Ingest(ctx context.Context, plugin, artifact string, data []byte) (cstxproto.GraphIngestResult, error) {
-	if err := contextError(ctx); err != nil {
-		return cstxproto.GraphIngestResult{}, err
-	}
-	return g.eng.graphIngest(ctx, plugin, artifact, data)
 }
 
 // Node returns one node or a *Error with CodeNotFound.

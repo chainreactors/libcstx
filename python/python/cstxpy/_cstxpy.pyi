@@ -17,6 +17,25 @@ def is_path_expression(expression: str) -> bool:
     ...
 
 
+def _normalize_semantic_text(text: str) -> str:
+    """Normalize one string the way semantic indexing compares them.
+
+    Private because the name callers use is ``cstx.models.semantic``'s
+    re-export; the computation lives in Rust so one text normalizes the same
+    way here and inside the RAG index.
+    """
+    ...
+
+
+def _readable_framework_terms(values: list[str | None] | None = None) -> list[str]:
+    """Split framework labels into the terms a reader would search for.
+
+    Accepts ``None`` for the list and for any element, because the field it
+    reads is an optional repeated column.
+    """
+    ...
+
+
 class CSTXError(Exception):
     """Stable CSTX error whose attributes can be handled without parsing text."""
 
@@ -138,6 +157,15 @@ class Extensions:
         """Atomically register one serialized ExtensionContract protobuf."""
         ...
 
+    def export_contract(self) -> bytes:
+        """Return what this runtime holds as an ``ExtensionContract`` protobuf.
+
+        A read-only snapshot, not a second registry: it is how a caller
+        refreshes its own view from what the core accepted rather than from
+        the contract it sent.
+        """
+        ...
+
     def enable(self, name: str) -> None:
         """Explicitly enable one linked native Rust extension."""
         ...
@@ -162,7 +190,7 @@ class Extensions:
         """Return retained schemas as a ``NodeTypeCatalog`` protobuf."""
         ...
 
-    def has_native_artifact(self, artifact: str) -> bool:
+    def parses_artifact(self, artifact: str) -> bool:
         """Return whether an enabled native parser supports an artifact."""
         ...
 
@@ -218,8 +246,8 @@ class CSTXGraph:
         """Create a cursor from serialized ``GraphQuery``."""
         ...
 
-    def ingest(self, data: bytes) -> bytes:
-        """Ingest serialized semantic ``ParserPayload`` bytes."""
+    def _parse(self, data: bytes) -> tuple[bytes, int]:
+        """Parse ``ParserPayload`` into serialized ``Graph`` bytes and a record count."""
         ...
 
     def link(self, selection: bytes, data_source: str) -> bytes:
@@ -297,7 +325,7 @@ class CSTXGraph:
         """Atomically remove relationships by stable CSTX ID."""
         ...
 
-    def patch_node_extras(self, data: bytes) -> int:
+    def patch_node_annotations(self, data: bytes) -> int:
         """Merge annotations from a serialized ``NodeAnnotationUpdate``."""
         ...
 
@@ -390,8 +418,13 @@ class Repository:
         """Synchronize from a serialized ``RepositoryState`` protobuf."""
         ...
 
-    def _missing(self, plan: bytes) -> bytes:
-        """Return a serialized ``ObjectSelection`` protobuf for one plan."""
+    def _missing(self, data: bytes) -> bytes:
+        """Return a serialized ``ObjectSelection`` protobuf for one plan.
+
+        The argument is a serialized ``RepositoryObjectPlan``. It is named
+        ``data`` because the binding names it that, and a keyword call has to
+        reach the binding, not the stub.
+        """
         ...
 
     def resolve(self, revision: str) -> str:
@@ -441,6 +474,14 @@ class Repository:
         limit: int = 50,
     ) -> bytes:
         """Return a serialized ``CommitLog`` protobuf."""
+        ...
+
+    def entities(
+        self,
+        entity_ids: list[str],
+        revision: str = "main",
+    ) -> bytes:
+        """Return a serialized ``Graph`` protobuf of the entities that are live."""
         ...
 
     def history(
@@ -587,14 +628,8 @@ class CSTX:
         self,
         project_id: str = "default",
         cursor_page_size: int = 1024,
-        payload_format: int = 0,
     ) -> None:
-        """Open an in-memory runtime with bounded cursor materialization.
-
-        ``payload_format`` is the ``cstx.PayloadFormat`` number: 0 returns node
-        payloads as the stored ``Any``, 1 returns them as ``EntityValue``,
-        which a caller with no generated message type can still read.
-        """
+        """Open an in-memory runtime with bounded cursor materialization."""
         ...
 
     @property
@@ -637,5 +672,3 @@ class CSTX:
     def __exit__(self, *args: Any) -> None:
         """Close the shared runtime when its context exits."""
         ...
-
-

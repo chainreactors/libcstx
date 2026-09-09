@@ -1,5 +1,4 @@
 from google.protobuf import descriptor_pb2 as _descriptor_pb2
-from google.protobuf import any_pb2 as _any_pb2
 from google.protobuf import struct_pb2 as _struct_pb2
 from google.protobuf.internal import containers as _containers
 from google.protobuf.internal import enum_type_wrapper as _enum_type_wrapper
@@ -9,22 +8,6 @@ from collections.abc import Iterable as _Iterable, Mapping as _Mapping
 from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
-
-class PayloadFormat(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    PAYLOAD_FORMAT_ENTITY: _ClassVar[PayloadFormat]
-    PAYLOAD_FORMAT_VALUE: _ClassVar[PayloadFormat]
-
-class NodeFlag(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
-    __slots__ = ()
-    NODE_FLAG_UNSPECIFIED: _ClassVar[NodeFlag]
-    NODE_FLAG_HONEYPOT: _ClassVar[NodeFlag]
-    NODE_FLAG_NOISE: _ClassVar[NodeFlag]
-    NODE_FLAG_FALSE_POSITIVE: _ClassVar[NodeFlag]
-    NODE_FLAG_MANUAL_IGNORED: _ClassVar[NodeFlag]
-    NODE_FLAG_THREAT_PRESENT: _ClassVar[NodeFlag]
-    NODE_FLAG_HISTORIC_VULNERABLE: _ClassVar[NodeFlag]
-    NODE_FLAG_INTERNAL: _ClassVar[NodeFlag]
 
 class ChangeOperation(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -97,6 +80,7 @@ class RepositoryPlanKind(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     REPOSITORY_PLAN_HISTORY: _ClassVar[RepositoryPlanKind]
     REPOSITORY_PLAN_MERGE: _ClassVar[RepositoryPlanKind]
     REPOSITORY_PLAN_DIFF: _ClassVar[RepositoryPlanKind]
+    REPOSITORY_PLAN_ENTITIES: _ClassVar[RepositoryPlanKind]
 
 class DiffDetail(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     __slots__ = ()
@@ -115,16 +99,6 @@ class RagIndexMode(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     RAG_INDEX_MODE_UNSPECIFIED: _ClassVar[RagIndexMode]
     RAG_INDEX_INCREMENTAL: _ClassVar[RagIndexMode]
     RAG_INDEX_FULL: _ClassVar[RagIndexMode]
-PAYLOAD_FORMAT_ENTITY: PayloadFormat
-PAYLOAD_FORMAT_VALUE: PayloadFormat
-NODE_FLAG_UNSPECIFIED: NodeFlag
-NODE_FLAG_HONEYPOT: NodeFlag
-NODE_FLAG_NOISE: NodeFlag
-NODE_FLAG_FALSE_POSITIVE: NodeFlag
-NODE_FLAG_MANUAL_IGNORED: NodeFlag
-NODE_FLAG_THREAT_PRESENT: NodeFlag
-NODE_FLAG_HISTORIC_VULNERABLE: NodeFlag
-NODE_FLAG_INTERNAL: NodeFlag
 CHANGE_OPERATION_UNSPECIFIED: ChangeOperation
 CHANGE_OPERATION_ADDED: ChangeOperation
 CHANGE_OPERATION_UPDATED: ChangeOperation
@@ -173,6 +147,7 @@ REPOSITORY_PLAN_CLOSURE: RepositoryPlanKind
 REPOSITORY_PLAN_HISTORY: RepositoryPlanKind
 REPOSITORY_PLAN_MERGE: RepositoryPlanKind
 REPOSITORY_PLAN_DIFF: RepositoryPlanKind
+REPOSITORY_PLAN_ENTITIES: RepositoryPlanKind
 DIFF_DETAIL_UNSPECIFIED: DiffDetail
 DIFF_DETAIL_ENTITIES: DiffDetail
 DIFF_DETAIL_COUNTS: DiffDetail
@@ -203,6 +178,13 @@ class CstxNodeOptions(_message.Message):
     label_field: str
     def __init__(self, node_type: _Optional[str] = ..., value_field: _Optional[str] = ..., identity_computed: _Optional[bool] = ..., label_field: _Optional[str] = ...) -> None: ...
 
+class CstxComputeOptions(_message.Message):
+    __slots__ = ()
+    FROM_FIELD_NUMBER: _ClassVar[int]
+    APPLY_FIELD_NUMBER: _ClassVar[int]
+    apply: str
+    def __init__(self, apply: _Optional[str] = ..., **kwargs) -> None: ...
+
 class CstxFieldOptions(_message.Message):
     __slots__ = ()
     IDENTITY_FIELD_NUMBER: _ClassVar[int]
@@ -211,13 +193,15 @@ class CstxFieldOptions(_message.Message):
     SEMANTIC_LABEL_FIELD_NUMBER: _ClassVar[int]
     COLUMN_FIELD_NUMBER: _ClassVar[int]
     ORDERED_VALUES_FIELD_NUMBER: _ClassVar[int]
+    COMPUTE_FIELD_NUMBER: _ClassVar[int]
     identity: bool
     identity_format: str
     semantic: bool
     semantic_label: str
     column: str
     ordered_values: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, identity: _Optional[bool] = ..., identity_format: _Optional[str] = ..., semantic: _Optional[bool] = ..., semantic_label: _Optional[str] = ..., column: _Optional[str] = ..., ordered_values: _Optional[_Iterable[str]] = ...) -> None: ...
+    compute: CstxComputeOptions
+    def __init__(self, identity: _Optional[bool] = ..., identity_format: _Optional[str] = ..., semantic: _Optional[bool] = ..., semantic_label: _Optional[str] = ..., column: _Optional[str] = ..., ordered_values: _Optional[_Iterable[str]] = ..., compute: _Optional[_Union[CstxComputeOptions, _Mapping]] = ...) -> None: ...
 
 class CstxRelationshipOptions(_message.Message):
     __slots__ = ()
@@ -239,11 +223,9 @@ class RuntimeConfig(_message.Message):
     __slots__ = ()
     PROJECT_ID_FIELD_NUMBER: _ClassVar[int]
     CURSOR_PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
-    PAYLOAD_FORMAT_FIELD_NUMBER: _ClassVar[int]
     project_id: str
     cursor_page_size: int
-    payload_format: PayloadFormat
-    def __init__(self, project_id: _Optional[str] = ..., cursor_page_size: _Optional[int] = ..., payload_format: _Optional[_Union[PayloadFormat, str]] = ...) -> None: ...
+    def __init__(self, project_id: _Optional[str] = ..., cursor_page_size: _Optional[int] = ...) -> None: ...
 
 class StringList(_message.Message):
     __slots__ = ()
@@ -275,37 +257,43 @@ class EntityValue(_message.Message):
     fields: _containers.RepeatedCompositeFieldContainer[EntityField]
     def __init__(self, node_type: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[EntityField, _Mapping]]] = ...) -> None: ...
 
+class RelationshipValue(_message.Message):
+    __slots__ = ()
+    RELATIONSHIP_TYPE_FIELD_NUMBER: _ClassVar[int]
+    FIELDS_FIELD_NUMBER: _ClassVar[int]
+    relationship_type: str
+    fields: _containers.RepeatedCompositeFieldContainer[EntityField]
+    def __init__(self, relationship_type: _Optional[str] = ..., fields: _Optional[_Iterable[_Union[EntityField, _Mapping]]] = ...) -> None: ...
+
 class Node(_message.Message):
     __slots__ = ()
     ID_FIELD_NUMBER: _ClassVar[int]
-    ENTITY_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     ANNOTATIONS_FIELD_NUMBER: _ClassVar[int]
-    FLAGS_FIELD_NUMBER: _ClassVar[int]
     VALUE_FIELD_NUMBER: _ClassVar[int]
+    FLAGS_MASK_FIELD_NUMBER: _ClassVar[int]
     id: str
-    entity: _any_pb2.Any
     sources: _containers.RepeatedScalarFieldContainer[str]
     annotations: _struct_pb2.Struct
-    flags: _containers.RepeatedScalarFieldContainer[NodeFlag]
     value: EntityValue
-    def __init__(self, id: _Optional[str] = ..., entity: _Optional[_Union[_any_pb2.Any, _Mapping]] = ..., sources: _Optional[_Iterable[str]] = ..., annotations: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., flags: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., value: _Optional[_Union[EntityValue, _Mapping]] = ...) -> None: ...
+    flags_mask: int
+    def __init__(self, id: _Optional[str] = ..., sources: _Optional[_Iterable[str]] = ..., annotations: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., value: _Optional[_Union[EntityValue, _Mapping]] = ..., flags_mask: _Optional[int] = ...) -> None: ...
 
 class Relationship(_message.Message):
     __slots__ = ()
     ID_FIELD_NUMBER: _ClassVar[int]
     SOURCE_ID_FIELD_NUMBER: _ClassVar[int]
     TARGET_ID_FIELD_NUMBER: _ClassVar[int]
-    RELATION_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     ANNOTATIONS_FIELD_NUMBER: _ClassVar[int]
+    VALUE_FIELD_NUMBER: _ClassVar[int]
     id: str
     source_id: str
     target_id: str
-    relation: _any_pb2.Any
     sources: _containers.RepeatedScalarFieldContainer[str]
     annotations: _struct_pb2.Struct
-    def __init__(self, id: _Optional[str] = ..., source_id: _Optional[str] = ..., target_id: _Optional[str] = ..., relation: _Optional[_Union[_any_pb2.Any, _Mapping]] = ..., sources: _Optional[_Iterable[str]] = ..., annotations: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ...) -> None: ...
+    value: RelationshipValue
+    def __init__(self, id: _Optional[str] = ..., source_id: _Optional[str] = ..., target_id: _Optional[str] = ..., sources: _Optional[_Iterable[str]] = ..., annotations: _Optional[_Union[_struct_pb2.Struct, _Mapping]] = ..., value: _Optional[_Union[RelationshipValue, _Mapping]] = ...) -> None: ...
 
 class Graph(_message.Message):
     __slots__ = ()
@@ -473,17 +461,17 @@ class NodeFilter(_message.Message):
     NODE_IDS_FIELD_NUMBER: _ClassVar[int]
     SOURCES_FIELD_NUMBER: _ClassVar[int]
     NAME_CONTAINS_FIELD_NUMBER: _ClassVar[int]
-    FLAGS_ALL_FIELD_NUMBER: _ClassVar[int]
-    FLAGS_ANY_FIELD_NUMBER: _ClassVar[int]
-    FLAGS_NONE_FIELD_NUMBER: _ClassVar[int]
+    FLAGS_ALL_MASK_FIELD_NUMBER: _ClassVar[int]
+    FLAGS_ANY_MASK_FIELD_NUMBER: _ClassVar[int]
+    FLAGS_NONE_MASK_FIELD_NUMBER: _ClassVar[int]
     node_types: _containers.RepeatedScalarFieldContainer[str]
     node_ids: _containers.RepeatedScalarFieldContainer[str]
     sources: _containers.RepeatedScalarFieldContainer[str]
     name_contains: str
-    flags_all: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    flags_any: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    flags_none: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    def __init__(self, node_types: _Optional[_Iterable[str]] = ..., node_ids: _Optional[_Iterable[str]] = ..., sources: _Optional[_Iterable[str]] = ..., name_contains: _Optional[str] = ..., flags_all: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., flags_any: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., flags_none: _Optional[_Iterable[_Union[NodeFlag, str]]] = ...) -> None: ...
+    flags_all_mask: int
+    flags_any_mask: int
+    flags_none_mask: int
+    def __init__(self, node_types: _Optional[_Iterable[str]] = ..., node_ids: _Optional[_Iterable[str]] = ..., sources: _Optional[_Iterable[str]] = ..., name_contains: _Optional[str] = ..., flags_all_mask: _Optional[int] = ..., flags_any_mask: _Optional[int] = ..., flags_none_mask: _Optional[int] = ...) -> None: ...
 
 class RelationshipFilter(_message.Message):
     __slots__ = ()
@@ -959,14 +947,14 @@ class GraphAnchorCatalog(_message.Message):
 class NodeFlagUpdate(_message.Message):
     __slots__ = ()
     MODE_FIELD_NUMBER: _ClassVar[int]
-    ADD_FIELD_NUMBER: _ClassVar[int]
-    REMOVE_FIELD_NUMBER: _ClassVar[int]
-    REPLACE_FIELD_NUMBER: _ClassVar[int]
+    ADD_MASK_FIELD_NUMBER: _ClassVar[int]
+    REMOVE_MASK_FIELD_NUMBER: _ClassVar[int]
+    REPLACE_MASK_FIELD_NUMBER: _ClassVar[int]
     mode: NodeFlagUpdateMode
-    add: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    remove: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    replace: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    def __init__(self, mode: _Optional[_Union[NodeFlagUpdateMode, str]] = ..., add: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., remove: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., replace: _Optional[_Iterable[_Union[NodeFlag, str]]] = ...) -> None: ...
+    add_mask: int
+    remove_mask: int
+    replace_mask: int
+    def __init__(self, mode: _Optional[_Union[NodeFlagUpdateMode, str]] = ..., add_mask: _Optional[int] = ..., remove_mask: _Optional[int] = ..., replace_mask: _Optional[int] = ...) -> None: ...
 
 class GraphProjectionReport(_message.Message):
     __slots__ = ()
@@ -1051,6 +1039,7 @@ class RepositoryObjectPlan(_message.Message):
     SOURCE_ID_FIELD_NUMBER: _ClassVar[int]
     TARGET_ID_FIELD_NUMBER: _ClassVar[int]
     DETAIL_FIELD_NUMBER: _ClassVar[int]
+    ENTITY_IDS_FIELD_NUMBER: _ClassVar[int]
     kind: RepositoryPlanKind
     commit_id: str
     limit: int
@@ -1060,19 +1049,20 @@ class RepositoryObjectPlan(_message.Message):
     source_id: str
     target_id: str
     detail: DiffDetail
-    def __init__(self, kind: _Optional[_Union[RepositoryPlanKind, str]] = ..., commit_id: _Optional[str] = ..., limit: _Optional[int] = ..., start_timestamp: _Optional[int] = ..., end_timestamp: _Optional[int] = ..., entity_id: _Optional[str] = ..., source_id: _Optional[str] = ..., target_id: _Optional[str] = ..., detail: _Optional[_Union[DiffDetail, str]] = ...) -> None: ...
+    entity_ids: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, kind: _Optional[_Union[RepositoryPlanKind, str]] = ..., commit_id: _Optional[str] = ..., limit: _Optional[int] = ..., start_timestamp: _Optional[int] = ..., end_timestamp: _Optional[int] = ..., entity_id: _Optional[str] = ..., source_id: _Optional[str] = ..., target_id: _Optional[str] = ..., detail: _Optional[_Union[DiffDetail, str]] = ..., entity_ids: _Optional[_Iterable[str]] = ...) -> None: ...
 
 class RagFilter(_message.Message):
     __slots__ = ()
     NODE_TYPES_FIELD_NUMBER: _ClassVar[int]
     RELATIONSHIP_TYPES_FIELD_NUMBER: _ClassVar[int]
-    EXCLUDE_FLAGS_FIELD_NUMBER: _ClassVar[int]
-    INCLUDE_FLAGS_FIELD_NUMBER: _ClassVar[int]
+    EXCLUDE_FLAGS_MASK_FIELD_NUMBER: _ClassVar[int]
+    INCLUDE_FLAGS_MASK_FIELD_NUMBER: _ClassVar[int]
     node_types: _containers.RepeatedScalarFieldContainer[str]
     relationship_types: _containers.RepeatedScalarFieldContainer[str]
-    exclude_flags: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    include_flags: _containers.RepeatedScalarFieldContainer[NodeFlag]
-    def __init__(self, node_types: _Optional[_Iterable[str]] = ..., relationship_types: _Optional[_Iterable[str]] = ..., exclude_flags: _Optional[_Iterable[_Union[NodeFlag, str]]] = ..., include_flags: _Optional[_Iterable[_Union[NodeFlag, str]]] = ...) -> None: ...
+    exclude_flags_mask: int
+    include_flags_mask: int
+    def __init__(self, node_types: _Optional[_Iterable[str]] = ..., relationship_types: _Optional[_Iterable[str]] = ..., exclude_flags_mask: _Optional[int] = ..., include_flags_mask: _Optional[int] = ...) -> None: ...
 
 class RagGraphChanges(_message.Message):
     __slots__ = ()

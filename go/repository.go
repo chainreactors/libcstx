@@ -136,6 +136,21 @@ func (r *Repository) Log(
 	return r.eng.repoLog(ctx, revision, limit)
 }
 
+// Entities reads the records of specific nodes and relationships at one
+// revision. It bisects the revision's runs rather than checking it out, so the
+// cost follows how many entities are asked for, not how many the graph holds.
+// Entities that are not live at revision are absent from the returned graph.
+func (r *Repository) Entities(
+	ctx context.Context,
+	revision string,
+	entityIDs []string,
+) (*cstxproto.Graph, error) {
+	if err := contextError(ctx); err != nil {
+		return nil, err
+	}
+	return r.eng.repoEntities(ctx, revision, entityIDs)
+}
+
 func (r *Repository) History(
 	ctx context.Context,
 	entityID string,

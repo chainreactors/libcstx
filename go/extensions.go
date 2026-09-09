@@ -127,12 +127,16 @@ func (e *Extensions) Schemas(ctx context.Context) (cstxproto.NodeTypeCatalog, er
 	return e.eng.extensionSchemas(ctx)
 }
 
-// HasNativeArtifact reports whether an enabled native parser supports an artifact.
-func (e *Extensions) HasNativeArtifact(ctx context.Context, artifact string) (bool, error) {
+// ParsesArtifact reports whether any enabled extension parses this artifact.
+//
+// Capability, not implementation: the answer says the engine can take this
+// payload, never which parser will. Callers routing work want this; nothing
+// should branch on "is it native".
+func (e *Extensions) ParsesArtifact(ctx context.Context, artifact string) (bool, error) {
 	if err := contextError(ctx); err != nil {
 		return false, err
 	}
-	return e.eng.extensionHasNativeArtifact(ctx, artifact)
+	return e.eng.extensionParsesArtifact(ctx, artifact)
 }
 
 // AnchorConcepts lists native concepts and their member node types.

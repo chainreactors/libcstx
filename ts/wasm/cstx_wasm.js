@@ -146,27 +146,6 @@ export class Extensions {
         }
     }
     /**
-     * @param {string} artifact
-     * @returns {boolean}
-     */
-    hasNativeArtifact(artifact) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(artifact, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len0 = WASM_VECTOR_LEN;
-            wasm.extensions_hasNativeArtifact(retptr, this.__wbg_ptr, ptr0, len0);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return r0 !== 0;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
      * @param {string} name
      * @returns {any}
      */
@@ -201,6 +180,27 @@ export class Extensions {
                 throw takeObject(r1);
             }
             return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
+     * @param {string} artifact
+     * @returns {boolean}
+     */
+    parsesArtifact(artifact) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(artifact, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            wasm.extensions_parsesArtifact(retptr, this.__wbg_ptr, ptr0, len0);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return r0 !== 0;
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -319,6 +319,40 @@ export class Graph {
         }
     }
     /**
+     * @param {string} source_id
+     * @param {string} target_id
+     * @param {string} relation
+     * @param {string[] | null} [sources]
+     * @param {any | null} [model]
+     * @param {string | null} [identity_key]
+     * @returns {any}
+     */
+    addRelationship(source_id, target_id, relation, sources, model, identity_key) {
+        try {
+            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
+            const ptr0 = passStringToWasm0(source_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len0 = WASM_VECTOR_LEN;
+            const ptr1 = passStringToWasm0(target_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len1 = WASM_VECTOR_LEN;
+            const ptr2 = passStringToWasm0(relation, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            const len2 = WASM_VECTOR_LEN;
+            var ptr3 = isLikeNone(sources) ? 0 : passArrayJsValueToWasm0(sources, wasm.__wbindgen_export);
+            var len3 = WASM_VECTOR_LEN;
+            var ptr4 = isLikeNone(identity_key) ? 0 : passStringToWasm0(identity_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
+            var len4 = WASM_VECTOR_LEN;
+            wasm.graph_addRelationship(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, isLikeNone(model) ? 0 : addHeapObject(model), ptr4, len4);
+            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
+            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
+            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
+            if (r2) {
+                throw takeObject(r1);
+            }
+            return takeObject(r0);
+        } finally {
+            wasm.__wbindgen_add_to_stack_pointer(16);
+        }
+    }
+    /**
      * @param {any} relationships
      * @returns {bigint}
      */
@@ -377,40 +411,6 @@ export class Graph {
                 throw takeObject(r1);
             }
             return r0 !== 0;
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
-     * @param {string} source_id
-     * @param {string} target_id
-     * @param {string} relation
-     * @param {string[] | null} [sources]
-     * @param {any | null} [attrs]
-     * @param {string | null} [identity_key]
-     * @returns {any}
-     */
-    createRelationship(source_id, target_id, relation, sources, attrs, identity_key) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(source_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(target_id, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len1 = WASM_VECTOR_LEN;
-            const ptr2 = passStringToWasm0(relation, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len2 = WASM_VECTOR_LEN;
-            var ptr3 = isLikeNone(sources) ? 0 : passArrayJsValueToWasm0(sources, wasm.__wbindgen_export);
-            var len3 = WASM_VECTOR_LEN;
-            var ptr4 = isLikeNone(identity_key) ? 0 : passStringToWasm0(identity_key, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            var len4 = WASM_VECTOR_LEN;
-            wasm.graph_createRelationship(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2, ptr3, len3, isLikeNone(attrs) ? 0 : addHeapObject(attrs), ptr4, len4);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return takeObject(r0);
         } finally {
             wasm.__wbindgen_add_to_stack_pointer(16);
         }
@@ -573,33 +573,6 @@ export class Graph {
         }
     }
     /**
-     * @param {string} plugin
-     * @param {string} artifact
-     * @param {Uint8Array} data
-     * @returns {any}
-     */
-    ingest(plugin, artifact, data) {
-        try {
-            const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
-            const ptr0 = passStringToWasm0(plugin, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len0 = WASM_VECTOR_LEN;
-            const ptr1 = passStringToWasm0(artifact, wasm.__wbindgen_export, wasm.__wbindgen_export2);
-            const len1 = WASM_VECTOR_LEN;
-            const ptr2 = passArray8ToWasm0(data, wasm.__wbindgen_export);
-            const len2 = WASM_VECTOR_LEN;
-            wasm.graph_ingest(retptr, this.__wbg_ptr, ptr0, len0, ptr1, len1, ptr2, len2);
-            var r0 = getDataViewMemory0().getInt32(retptr + 4 * 0, true);
-            var r1 = getDataViewMemory0().getInt32(retptr + 4 * 1, true);
-            var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
-            if (r2) {
-                throw takeObject(r1);
-            }
-            return takeObject(r0);
-        } finally {
-            wasm.__wbindgen_add_to_stack_pointer(16);
-        }
-    }
-    /**
      * @param {string[]} node_ids
      * @param {string} data_source
      * @returns {any}
@@ -749,12 +722,12 @@ export class Graph {
      * @param {any} patch
      * @returns {bigint}
      */
-    patchNodeExtras(node_ids, patch) {
+    patchNodeAnnotations(node_ids, patch) {
         try {
             const retptr = wasm.__wbindgen_add_to_stack_pointer(-16);
             var ptr0 = isLikeNone(node_ids) ? 0 : passArrayJsValueToWasm0(node_ids, wasm.__wbindgen_export);
             var len0 = WASM_VECTOR_LEN;
-            wasm.graph_patchNodeExtras(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(patch));
+            wasm.graph_patchNodeAnnotations(retptr, this.__wbg_ptr, ptr0, len0, addHeapObject(patch));
             var r0 = getDataViewMemory0().getBigInt64(retptr + 8 * 0, true);
             var r2 = getDataViewMemory0().getInt32(retptr + 4 * 2, true);
             var r3 = getDataViewMemory0().getInt32(retptr + 4 * 3, true);
@@ -1775,13 +1748,6 @@ let heap_next = heap.length;
 
 function isLikeNone(x) {
     return x === undefined || x === null;
-}
-
-function passArray8ToWasm0(arg, malloc) {
-    const ptr = malloc(arg.length * 1, 1) >>> 0;
-    getUint8ArrayMemory0().set(arg, ptr / 1);
-    WASM_VECTOR_LEN = arg.length;
-    return ptr;
 }
 
 function passArrayJsValueToWasm0(array, malloc) {

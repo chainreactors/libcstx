@@ -30,7 +30,6 @@ func newEngine(config runtimeConfig) (engine, error) {
 	payload, err := proto.Marshal(&cstxproto.RuntimeConfig{
 		ProjectId:      config.projectID,
 		CursorPageSize: uint64(config.cursorPageSize),
-		PayloadFormat:  config.payloadFormat,
 	})
 	if err != nil {
 		return nil, err
@@ -347,9 +346,9 @@ func (e *nativeEngine) extensionSchemas(_ context.Context) (cstxproto.NodeTypeCa
 	return value, nil
 }
 
-func (e *nativeEngine) extensionHasNativeArtifact(_ context.Context, artifact string) (bool, error) {
-	return boolResult("extensions.has_native_artifact", func(out *C.uint8_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_extension_has_native_artifact(e.handle, stringSlice(artifact), out, errBuf)
+func (e *nativeEngine) extensionParsesArtifact(_ context.Context, artifact string) (bool, error) {
+	return boolResult("extensions.parses_artifact", func(out *C.uint8_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_extension_parses_artifact(e.handle, stringSlice(artifact), out, errBuf)
 		runtime.KeepAlive(artifact)
 		return rc
 	})
@@ -383,25 +382,12 @@ func (e *nativeEngine) graphAddRelationships(_ context.Context, relationships []
 	return e.graphAddRelationshipsWire(context.Background(), &cstxproto.Graph{Relationships: relationships})
 }
 
-func (e *nativeEngine) graphIngest(_ context.Context, plugin, artifact string, data []byte) (cstxproto.GraphIngestResult, error) {
-	request, err := proto.Marshal(&cstxproto.ParserPayload{
-		Plugin:   plugin,
-		Artifact: artifact,
-		Data:     data,
-	})
+func (e *nativeEngine) graphAddRelationship(_ context.Context, relationship *cstxproto.Relationship) (*cstxproto.Relationship, error) {
+	value, err := e.graphAddRelationshipWire(context.Background(), relationship)
 	if err != nil {
-		return cstxproto.GraphIngestResult{}, err
+		return nil, err
 	}
-	bytes, err := bufferResult("graph.ingest", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
-		rc := C.cstx_graph_ingest(e.handle, byteSlice(request), out, errBuf)
-		runtime.KeepAlive(request)
-		return rc
-	})
-	var value cstxproto.GraphIngestResult
-	if err := proto.Unmarshal(bytes, &value); err != nil {
-		return cstxproto.GraphIngestResult{}, err
-	}
-	return value, nil
+	return &value, nil
 }
 
 func (e *nativeEngine) graphNode(_ context.Context, nodeID string) (*cstxproto.Node, error) {
@@ -813,6 +799,33 @@ func (e *nativeEngine) repoHistory(
 		return nil, err
 	}
 	var wire cstxproto.EntityHistory
+	if err := proto.Unmarshal(data, &wire); err != nil {
+		return nil, err
+	}
+	return &wire, nil
+}
+
+func (e *nativeEngine) repoEntities(
+	_ context.Context,
+	revision string,
+	entityIDs []string,
+) (*cstxproto.Graph, error) {
+	// Node and relationship ids are one set to the engine, which tells them
+	// apart by the `relationship:` prefix.
+	selection, err := proto.Marshal(&cstxproto.GraphSelection{NodeIds: entityIDs})
+	if err != nil {
+		return nil, err
+	}
+	data, err := bufferResult("repo.entities", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_repo_entities(e.handle, stringSlice(revision), byteSlice(selection), out, errBuf)
+		runtime.KeepAlive(revision)
+		runtime.KeepAlive(selection)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	var wire cstxproto.Graph
 	if err := proto.Unmarshal(data, &wire); err != nil {
 		return nil, err
 	}

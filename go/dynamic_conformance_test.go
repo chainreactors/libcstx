@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/chainreactors/libcstx/go/proto/cstxproto"
-	"google.golang.org/protobuf/types/known/anypb"
 )
 
 // One field as the shared fixture's schema document declares it.
@@ -26,7 +25,7 @@ type dynamicFixture struct {
 	RawValues  json.RawMessage `json:"values"`
 	ExpectedID string          `json:"expected_id"`
 	Relation   struct {
-		RelationType string `json:"relation_type"`
+		RelationType string `json:"type"`
 		TypeURL      string `json:"type_url"`
 	} `json:"relation"`
 }
@@ -94,8 +93,7 @@ func fixtureValues(t *testing.T, fixture dynamicFixture) NodeValues {
 func openDynamicRuntime(t *testing.T, fixture dynamicFixture) *CSTX {
 	t.Helper()
 	runtime, err := Open(context.Background(), &cstxproto.RuntimeConfig{
-		ProjectId:     "go-dyn-conformance",
-		PayloadFormat: cstxproto.PayloadFormat_PAYLOAD_FORMAT_VALUE,
+		ProjectId: "go-dyn-conformance",
 	})
 	if err != nil {
 		t.Fatalf("open: %v", err)
@@ -158,9 +156,9 @@ func TestDynamicExtensionConformance(t *testing.T) {
 // A relation type declared by the same document, with no generated code.
 //
 // A relation carries no payload — the document declares that the type exists
-// and which message names it, and the bytes are empty. So building one needs
-// the type URL and nothing else, which is the whole reason a relation type
-// declared at runtime can work at all.
+// and which message names it, and the bytes are empty. The write uses that
+// type URL; this runtime is configured for the semantic value spelling, so
+// the read must resolve it back to the declared relationship type.
 func TestDynamicExtensionRelationRoundTrips(t *testing.T) {
 	ctx := context.Background()
 	fixture := loadDynamicFixture(t)
@@ -178,7 +176,7 @@ func TestDynamicExtensionRelationRoundTrips(t *testing.T) {
 		SourceId: fixture.ExpectedID,
 		TargetId: "acme_asset:a-2",
 		Sources:  []string{"test"},
-		Relation: &anypb.Any{TypeUrl: fixture.Relation.TypeURL},
+		Value:    &cstxproto.RelationshipValue{RelationshipType: fixture.Relation.RelationType},
 	}
 	if _, err := runtime.Graph.AddRelationships(ctx, []*cstxproto.Relationship{edge}); err != nil {
 		t.Fatalf("add_relationships: %v", err)
@@ -197,8 +195,8 @@ func TestDynamicExtensionRelationRoundTrips(t *testing.T) {
 	if len(stored) != 1 {
 		t.Fatalf("relationship count = %d; want 1", len(stored))
 	}
-	if got := stored[0].GetRelation().GetTypeUrl(); got != fixture.Relation.TypeURL {
-		t.Fatalf("relation type_url = %q; want %q", got, fixture.Relation.TypeURL)
+	if got := stored[0].GetValue().GetRelationshipType(); got != fixture.Relation.RelationType {
+		t.Fatalf("relationship type = %q; want %q", got, fixture.Relation.RelationType)
 	}
 }
 
@@ -212,11 +210,11 @@ type conformanceFile struct {
 		Sources []string          `json:"sources"`
 	} `json:"nodes"`
 	Relationships []struct {
-		ID           string   `json:"id"`
-		SourceID     string   `json:"source_id"`
-		TargetID     string   `json:"target_id"`
-		RelationType string   `json:"relation_type"`
-		Sources      []string `json:"sources"`
+		ID       string   `json:"id"`
+		SourceID string   `json:"source_id"`
+		TargetID string   `json:"target_id"`
+		Type     string   `json:"type"`
+		Sources  []string `json:"sources"`
 	} `json:"relationships"`
 	Query    string `json:"query"`
 	Expected struct {

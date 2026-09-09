@@ -15,7 +15,6 @@ from pathlib import Path
 
 import cstxpy
 from cstxpy.proto import cstx_pb2 as cstx
-from google.protobuf.any_pb2 import Any
 
 FIXTURE = json.loads(
     (
@@ -33,20 +32,15 @@ def _graph(fixture: dict) -> bytes:
             entity.fields.add(name=name, text=value)
         nodes.append(cstx.Node(id=item["id"], sources=item["sources"], value=entity))
 
-    relations = fixture["document"]["relations"]
     relationships = [
         cstx.Relationship(
             id=item["id"],
             source_id=item["source_id"],
             target_id=item["target_id"],
             sources=item["sources"],
-            # A relation type is a field-less marker: the document names the
-            # message and the payload is empty.
-            relation=Any(
-                type_url="type.googleapis.com/"
-                + relations[item["relation_type"]]["message"],
-                value=b"",
-            ),
+            # A relation type is a field-less marker: the document names it and
+            # the payload carries nothing else.
+            value=cstx.RelationshipValue(relationship_type=item["type"]),
         )
         for item in fixture["relationships"]
     ]

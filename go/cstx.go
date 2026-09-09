@@ -11,10 +11,6 @@ import (
 type runtimeConfig struct {
 	projectID      string
 	cursorPageSize int
-	// Which spelling of a node payload reads return. A program holding no
-	// generated type for a node needs the value spelling, so this has to
-	// survive normalization rather than being dropped here.
-	payloadFormat cstxproto.PayloadFormat
 }
 
 func normalizeRuntimeConfig(value *cstxproto.RuntimeConfig) runtimeConfig {
@@ -28,7 +24,6 @@ func normalizeRuntimeConfig(value *cstxproto.RuntimeConfig) runtimeConfig {
 	if value.CursorPageSize > 0 {
 		config.cursorPageSize = int(value.CursorPageSize)
 	}
-	config.payloadFormat = value.PayloadFormat
 	return config
 }
 

@@ -146,9 +146,7 @@ def test_runtime_schema_carries_no_export_format_metadata():
     STIX spellings used to ride along here; they belong to the exporter that
     needs them, not to the contract every extension has to satisfy.
     """
-    import dataclasses
-
-    assert "stix_type" not in {f.name for f in dataclasses.fields(NodeSchema)}
+    assert "stix_type" not in set(NodeSchema.model_fields)
     assert not hasattr(cstx_schema, "stix_type_for")
     assert not hasattr(cstx_schema, "node_type_from_stix")
     assert not hasattr(SchemaRegistry, "stix_type_for")
@@ -156,7 +154,7 @@ def test_runtime_schema_carries_no_export_format_metadata():
         assert "stix" not in path.read_text(encoding="utf-8").lower(), path
 
 
-def register(document: dict, *, values: bool = False) -> "cstxpy.CSTX":
+def register(document: dict) -> "cstxpy.CSTX":
     """Declare a type the one way a caller can: through a runtime.
 
     The core validates and accepts, then the view is refreshed from what the
@@ -167,14 +165,7 @@ def register(document: dict, *, values: bool = False) -> "cstxpy.CSTX":
     import cstxpy
     from cstxpy.proto import cstx_pb2 as cstx_proto
 
-    # `values=True` opens the runtime in the payload format that hands nodes
-    # back named by the document. Without it reads return an `Any`, and a
-    # `Node.value` assertion then sees an empty message rather than a failure.
-    runtime = cstxpy.CSTX(
-        payload_format=cstx_proto.PAYLOAD_FORMAT_VALUE
-        if values
-        else cstx_proto.PAYLOAD_FORMAT_ENTITY
-    )
+    runtime = cstxpy.CSTX()
     contract = cstx_proto.ExtensionContract(contract_version=1)
     definition = contract.extensions[document["extension"]]
     definition.name = document["extension"]
@@ -184,18 +175,6 @@ def register(document: dict, *, values: bool = False) -> "cstxpy.CSTX":
         cstx_proto.ExtensionContract.FromString(runtime.extensions.export_contract())
     )
     return runtime
-
-
-def test_runtime_rejects_unknown_payload_format_at_the_python_boundary():
-    import cstxpy
-
-    with pytest.raises(cstxpy.CSTXError) as captured:
-        cstxpy.CSTX(payload_format=99)
-
-    assert captured.value.code == "INVALID_ARGUMENT"
-    assert captured.value.operation == "cstx.open"
-    assert captured.value.field == "payload_format"
-    assert captured.value.actual == "99"
 
 
 def test_runtime_extension_gets_the_same_derived_base():
@@ -422,7 +401,7 @@ def test_derived_annotation_survives_the_column_it_lands_in():
     from cstxpy.proto import cstx_pb2 as cstx_proto
 
     document = _probe_document()
-    runtime = register(document, values=True)
+    runtime = register(document)
     try:
         base = cstx_model.base_model("probe_node")
         declared = {f"f_{name}" for name in ENCODABLE_SAMPLES}

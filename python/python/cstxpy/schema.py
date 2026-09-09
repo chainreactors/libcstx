@@ -13,10 +13,10 @@ neither is privileged.
 from __future__ import annotations
 
 import json
-import dataclasses
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Tuple
+
+from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = (
     "FieldSchema",
@@ -42,9 +42,10 @@ def _message_short_name(type_url: str) -> str:
     return type_url.rsplit("/", 1)[-1].rsplit(".", 1)[-1]
 
 
-@dataclass(frozen=True)
-class FieldSchema:
+class FieldSchema(BaseModel):
     """One column, described exactly as the source ``.proto`` declared it."""
+
+    model_config = ConfigDict(frozen=True)
 
     name: str
     number: int
@@ -78,9 +79,10 @@ class FieldSchema:
         )
 
 
-@dataclass(frozen=True)
-class NodeSchema:
+class NodeSchema(BaseModel):
     """One node type: its message, identity contract and columns."""
+
+    model_config = ConfigDict(frozen=True)
 
     node_type: str
     message: str
@@ -114,34 +116,44 @@ class NodeSchema:
                 return item
         return None
 
-    def semantic_fields(self) -> Tuple[FieldSchema, ...]:
-        return tuple(item for item in self.fields if item.semantic)
 
-
-@dataclass(frozen=True)
-class RelationSchema:
+class RelationSchema(BaseModel):
     """One relation type and the message that carries its edge payload."""
+
+    model_config = ConfigDict(frozen=True)
 
     relation_type: str
     message: str
+    fields: Tuple[FieldSchema, ...]
 
     @classmethod
     def parse(cls, relation_type: str, data: Mapping[str, Any]) -> "RelationSchema":
-        return cls(relation_type=relation_type, message=str(data["message"]))
+        return cls(
+            relation_type=relation_type,
+            message=str(data["message"]),
+            fields=tuple(FieldSchema.parse(item) for item in data.get("fields", ())),
+        )
 
     @property
     def type_url(self) -> str:
         return f"{TYPE_URL_PREFIX}{self.message}"
 
+    def field(self, name: str) -> Optional[FieldSchema]:
+        for item in self.fields:
+            if item.name == name:
+                return item
+        return None
 
-@dataclass(frozen=True)
-class FlagSchema:
+
+class FlagSchema(BaseModel):
     """One flag an extension declares, and the bit it owns.
 
     The bit is identity, like a field number: it is what a stored mask means.
     A runtime holds the mechanism — a 64-bit mask — and never the vocabulary,
     so `honeypot` is EASM's word and lives in EASM's document.
     """
+
+    model_config = ConfigDict(frozen=True)
 
     bit: int
     default_exclude: bool = False
@@ -154,15 +166,16 @@ class FlagSchema:
         )
 
 
-@dataclass(frozen=True)
-class ExtensionSchema:
+class ExtensionSchema(BaseModel):
     """Every node and relation type contributed by one extension."""
 
+    model_config = ConfigDict(frozen=True)
+
     extension: str
-    nodes: Dict[str, NodeSchema] = dataclasses.field(default_factory=dict)
-    relations: Dict[str, RelationSchema] = dataclasses.field(default_factory=dict)
+    nodes: Dict[str, NodeSchema] = Field(default_factory=dict)
+    relations: Dict[str, RelationSchema] = Field(default_factory=dict)
     #: Named judgements this extension makes about a node, keyed by name.
-    flags: Dict[str, FlagSchema] = dataclasses.field(default_factory=dict)
+    flags: Dict[str, FlagSchema] = Field(default_factory=dict)
 
     @classmethod
     def parse(cls, data: Mapping[str, Any]) -> "ExtensionSchema":

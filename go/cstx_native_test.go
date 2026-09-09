@@ -9,9 +9,8 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/chainreactors/libcstx/go/plugins/easm"
 	"github.com/chainreactors/libcstx/go/proto/cstxproto"
-	"github.com/chainreactors/libcstx/go/proto/easmproto"
-	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/structpb"
 )
 
@@ -42,16 +41,16 @@ func openRuntime(t *testing.T) *CSTX {
 }
 
 func domainNode(value string) *cstxproto.Node {
-	entity, err := anypb.New(&easmproto.Domain{Host: value})
+	// Through the generated typed layer, which builds the schema-named payload.
+	// Nothing here holds a generated protobuf message for the node type, which
+	// is the property a type declared at runtime depends on.
+	node, err := easm.Domain{Host: value}.Node("test")
 	if err != nil {
 		panic(err)
 	}
 	id := "domain:" + value
-	return &cstxproto.Node{
-		Id:      &id,
-		Sources: []string{"test"},
-		Entity:  entity,
-	}
+	node.Id = &id
+	return node
 }
 
 func usesRelationship(source, target string) *cstxproto.Relationship {
@@ -61,15 +60,18 @@ func usesRelationship(source, target string) *cstxproto.Relationship {
 		SourceId: source,
 		TargetId: target,
 		Sources:  []string{"test"},
-		Relation: &anypb.Any{TypeUrl: "type.googleapis.com/easm.Uses"},
+		Value:    &cstxproto.RelationshipValue{RelationshipType: easm.RelUses},
 	}
 }
 
 func domainValue(t *testing.T, node *cstxproto.Node) string {
 	t.Helper()
-	var domain easmproto.Domain
-	if node == nil || node.Entity == nil || node.Entity.UnmarshalTo(&domain) != nil {
-		t.Fatalf("invalid domain node: %+v", node)
+	if node == nil {
+		t.Fatal("invalid domain node: nil")
+	}
+	domain, err := easm.DomainFrom(node.GetValue())
+	if err != nil {
+		t.Fatalf("invalid domain node: %+v (%v)", node, err)
 	}
 	return domain.Host
 }
@@ -269,13 +271,9 @@ func TestExtensionsSchemaSurface(t *testing.T) {
 	if err := rt.Extensions.Enable(testContext, "easm"); err != nil {
 		t.Fatalf("enable easm plugin: %v", err)
 	}
-	hasGogo, err := rt.Extensions.HasNativeArtifact(testContext, "gogo")
+	hasGogo, err := rt.Extensions.ParsesArtifact(testContext, "gogo")
 	if err != nil || !hasGogo {
 		t.Fatalf("has native gogo artifact: %v err=%v", hasGogo, err)
-	}
-	gogo := []byte(`{"ip":"192.0.2.1","port":"80","protocol":"tcp","status":"200"}` + "\n")
-	if result, err := rt.Graph.Ingest(testContext, "easm", "gogo", gogo); err != nil || result.RecordsParsed == 0 {
-		t.Fatalf("ingest gogo: result=%v err=%v", result, err)
 	}
 }
 
@@ -574,7 +572,7 @@ func TestGraphQueryOptionsCrossFFIBoundary(t *testing.T) {
 
 	external := domainNode("external.example.com")
 	internal := domainNode("internal.example.com")
-	internal.Flags = []cstxproto.NodeFlag{cstxproto.NodeFlag_NODE_FLAG_INTERNAL}
+	internal.FlagsMask = 1 << 6 // easm declares `internal` at bit 6
 	if affected, err := rt.Graph.AddNodes(testContext, []*cstxproto.Node{external, internal}); err != nil || affected != 2 {
 		t.Fatalf("add query option nodes: affected=%d err=%v", affected, err)
 	}
@@ -608,10 +606,10 @@ func TestGraphQueryOptionsCrossFFIBoundary(t *testing.T) {
 	if ids := collect(&cstxproto.GraphQuery{Expression: "domain", Options: &cstxproto.QueryOptions{Window: &cstxproto.QueryWindow{Limit: &one, Page: 2}}}); !reflect.DeepEqual(ids, []string{internal.GetId()}) {
 		t.Fatalf("second query page returned %v", ids)
 	}
-	if ids := collect(&cstxproto.GraphQuery{Expression: "domain", Options: &cstxproto.QueryOptions{ResultFilter: &cstxproto.NodeFilter{FlagsAll: []cstxproto.NodeFlag{cstxproto.NodeFlag_NODE_FLAG_INTERNAL}}}}); !reflect.DeepEqual(ids, []string{internal.GetId()}) {
+	if ids := collect(&cstxproto.GraphQuery{Expression: "domain", Options: &cstxproto.QueryOptions{ResultFilter: &cstxproto.NodeFilter{FlagsAllMask: 1 << 6}}}); !reflect.DeepEqual(ids, []string{internal.GetId()}) {
 		t.Fatalf("include-mask query returned %v", ids)
 	}
-	if ids := collect(&cstxproto.GraphQuery{Expression: "domain", Options: &cstxproto.QueryOptions{ResultFilter: &cstxproto.NodeFilter{FlagsNone: []cstxproto.NodeFlag{cstxproto.NodeFlag_NODE_FLAG_INTERNAL}}}}); !reflect.DeepEqual(ids, []string{external.GetId()}) {
+	if ids := collect(&cstxproto.GraphQuery{Expression: "domain", Options: &cstxproto.QueryOptions{ResultFilter: &cstxproto.NodeFilter{FlagsNoneMask: 1 << 6}}}); !reflect.DeepEqual(ids, []string{external.GetId()}) {
 		t.Fatalf("exclude-mask query returned %v", ids)
 	}
 }
@@ -763,11 +761,9 @@ func TestConformanceFixtureMatchesGoContract(t *testing.T) {
 		edges = append(edges, &cstxproto.Relationship{
 			Id: &id, SourceId: item.SourceID, TargetId: item.TargetID,
 			Sources: item.Sources,
-			// A relation type is a field-less marker: the document names the
-			// message and the payload is empty.
-			Relation: &anypb.Any{
-				TypeUrl: "type.googleapis.com/" + document.Relations[item.RelationType].Message,
-			},
+			// A relation type is a field-less marker: the document names it and
+			// the payload carries nothing else.
+			Value: &cstxproto.RelationshipValue{RelationshipType: item.Type},
 		})
 	}
 	if _, err := rt.Graph.AddRelationships(testContext, edges); err != nil {

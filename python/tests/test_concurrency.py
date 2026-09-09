@@ -4,8 +4,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
 
 from cstxpy import CSTX
-from cstxpy.proto import cstx_pb2 as cstx, sco_pb2 as easm
-from google.protobuf.any_pb2 import Any
+from cstxpy.proto import cstx_pb2 as cstx
 from google.protobuf.struct_pb2 import Struct
 
 
@@ -28,9 +27,14 @@ _SCHEMA = """{
 
 
 def _node(value: str) -> cstx.Node:
-    node = cstx.Node(id=f"ip:{value}", sources=["concurrency"])
-    node.entity.CopyFrom(Any(type_url="type.googleapis.com/easm.Ip", value=(easm.Ip(ip=value)).SerializeToString()))
-    return node
+    return cstx.Node(
+        id=f"ip:{value}",
+        sources=["concurrency"],
+        value=cstx.EntityValue(
+            node_type="ip",
+            fields=[cstx.EntityField(name="ip", text=value)],
+        ),
+    )
 
 
 def _graph(nodes: list[cstx.Node]) -> bytes:

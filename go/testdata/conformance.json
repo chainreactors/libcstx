@@ -49,7 +49,7 @@
       "sources": [
         "fixture"
       ],
-      "extras": {}
+      "annotations": {}
     },
     {
       "id": "asset:alpha",
@@ -62,7 +62,7 @@
       "sources": [
         "fixture"
       ],
-      "extras": {}
+      "annotations": {}
     }
   ],
   "relationships": [
@@ -70,11 +70,13 @@
       "id": "relationship:asset:alpha:related:asset:beta",
       "source_id": "asset:alpha",
       "target_id": "asset:beta",
-      "relation_type": "related",
+      "type": "related",
       "sources": [
         "fixture"
       ],
-      "attrs": {}
+      "model": {},
+      "extra": {},
+      "annotations": {}
     }
   ],
   "query": "asset",
@@ -219,7 +221,7 @@
     },
     "expected_id": "acme_asset:a-1",
     "relation": {
-      "relation_type": "acme_owns",
+      "type": "acme_owns",
       "type_url": "type.googleapis.com/acme.Owns"
     }
   }
