@@ -1,7 +1,6 @@
 package cstx
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 )
@@ -51,37 +50,9 @@ func IsCode(err error, code Code) bool {
 	return errors.As(err, &cerr) && cerr.Code == code
 }
 
-// errorJSON is the FFI transport shape; nullable string fields distinguish
-// absent context from empty strings on the Rust side.
-type errorJSON struct {
-	Code      Code    `json:"code"`
-	Operation string  `json:"operation"`
-	ItemIndex *int    `json:"item_index"`
-	Field     *string `json:"field"`
-	Message   string  `json:"message"`
-	Expected  *string `json:"expected"`
-	Actual    *string `json:"actual"`
-}
-
+// parseError decodes the error channel.  Structured runtime payloads use
+// protobuf; failures intentionally remain a compact UTF-8 diagnostic paired
+// with the CstxStatusCode so callers never need a second error codec.
 func parseError(data []byte, fallback Code) *Error {
-	var wire errorJSON
-	if err := json.Unmarshal(data, &wire); err != nil || wire.Code == "" {
-		return &Error{Code: fallback, Message: string(data)}
-	}
-	return &Error{
-		Code:      wire.Code,
-		Operation: wire.Operation,
-		ItemIndex: wire.ItemIndex,
-		Field:     deref(wire.Field),
-		Message:   wire.Message,
-		Expected:  deref(wire.Expected),
-		Actual:    deref(wire.Actual),
-	}
-}
-
-func deref(value *string) string {
-	if value == nil {
-		return ""
-	}
-	return *value
+	return &Error{Code: fallback, Message: string(data)}
 }

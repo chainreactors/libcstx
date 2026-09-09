@@ -2,8 +2,8 @@
 //
 // The Rust core is the sole owner of graph, repository, validation,
 // and ingest semantics (issue #6). This package only converts between Go
-// domain values and the JSON transport used by the cstx-ffi C boundary; it
-// never reimplements business behavior.
+// domain values and the protobuf transport used by the cstx-ffi C boundary;
+// it never reimplements business behavior.
 //
 // The engine behind Open always uses the bundled cstx-ffi static library.
 // Consumers therefore build this package with CGO enabled. Prebuilt libraries

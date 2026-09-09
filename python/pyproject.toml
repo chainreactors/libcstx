@@ -7,7 +7,11 @@ name = "cstxpy"
 requires-python = ">=3.10"
 description = "Native Python bindings for the CSTX unified runtime"
 dynamic = ["version"]
-dependencies = ["pydantic>=2.0.0,<3.0.0"]
+dependencies = [
+    "protobuf>=6.33.0,<7.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+]
+
 license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Rust",
