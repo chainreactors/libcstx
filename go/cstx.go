@@ -33,10 +33,11 @@ type CSTX struct {
 	eng       engine
 	projectID string
 
-	// Extensions, Graph, and Repo are lightweight namespaces sharing
+	// Extensions, Graph, Rag, and Repo are lightweight namespaces sharing
 	// this runtime's state.
 	Extensions *Extensions
 	Graph      *Graph
+	Rag        *Rag
 	Repo       *Repository
 
 	mu     sync.Mutex
@@ -60,6 +61,7 @@ func wrapRuntime(eng engine, projectID string) *CSTX {
 	rt := &CSTX{eng: eng, projectID: projectID}
 	rt.Extensions = &Extensions{eng: eng}
 	rt.Graph = &Graph{eng: eng}
+	rt.Rag = &Rag{eng: eng}
 	rt.Repo = &Repository{eng: eng}
 	return rt
 }

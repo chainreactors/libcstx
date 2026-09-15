@@ -17,6 +17,50 @@ import (
 	"google.golang.org/protobuf/proto"
 )
 
+func (e *nativeEngine) graphParseWire(_ context.Context, payload *cstxproto.ParserPayload) (cstxproto.Graph, uint64, error) {
+	if payload == nil {
+		return cstxproto.Graph{}, 0, &Error{Code: CodeInvalidArgument, Operation: "graph.parse", Message: "payload must not be nil"}
+	}
+	encoded, err := proto.Marshal(payload)
+	if err != nil {
+		return cstxproto.Graph{}, 0, err
+	}
+	var records C.uint64_t
+	var out, errBuf C.CstxBuffer
+	if err := statusError(C.cstx_graph_parse(e.handle, byteSlice(encoded), &records, &out, &errBuf), "graph.parse", &errBuf); err != nil {
+		C.cstx_buffer_free(&out)
+		return cstxproto.Graph{}, 0, err
+	}
+	runtime.KeepAlive(encoded)
+	data := takeBuffer(&out)
+	var graph cstxproto.Graph
+	if err := proto.Unmarshal(data, &graph); err != nil {
+		return cstxproto.Graph{}, 0, fmt.Errorf("cstx: decode graph protobuf: %w", err)
+	}
+	return graph, uint64(records), nil
+}
+
+func (e *nativeEngine) graphLinkWire(_ context.Context, nodeIDs []string, dataSource string) (cstxproto.GraphLinkResult, error) {
+	selection, err := proto.Marshal(&cstxproto.GraphSelection{NodeIds: nodeIDs})
+	if err != nil {
+		return cstxproto.GraphLinkResult{}, err
+	}
+	data, err := bufferResult("graph.link", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_link(e.handle, byteSlice(selection), stringSlice(dataSource), out, errBuf)
+		runtime.KeepAlive(selection)
+		runtime.KeepAlive(dataSource)
+		return rc
+	})
+	if err != nil {
+		return cstxproto.GraphLinkResult{}, err
+	}
+	var result cstxproto.GraphLinkResult
+	if err := proto.Unmarshal(data, &result); err != nil {
+		return cstxproto.GraphLinkResult{}, fmt.Errorf("cstx: decode graph link result protobuf: %w", err)
+	}
+	return result, nil
+}
+
 func (e *nativeEngine) graphAddNodesWire(_ context.Context, graph *cstxproto.Graph) (uint64, error) {
 	payload, err := proto.Marshal(graph)
 	if err != nil {

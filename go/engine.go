@@ -26,6 +26,7 @@ type engine interface {
 	extensionParsesArtifact(context.Context, string) (bool, error)
 	extensionAnchorConcepts(context.Context) (cstxproto.AnchorConceptCatalog, error)
 
+	graphParse(context.Context, *cstxproto.ParserPayload) (*cstxproto.Graph, uint64, error)
 	graphAddNodes(context.Context, []*cstxproto.Node) (uint64, error)
 	graphReplaceNodes(context.Context, []*cstxproto.Node) (uint64, error)
 	graphAddRelationships(context.Context, []*cstxproto.Relationship) (uint64, error)
@@ -33,17 +34,38 @@ type engine interface {
 	graphDeleteNodes(context.Context, []string) (uint64, error)
 	graphDeleteRelationships(context.Context, []string) (uint64, error)
 	graphNode(context.Context, string) (*cstxproto.Node, error)
+	graphFindNode(context.Context, string) (*cstxproto.Node, error)
 	graphRelationship(context.Context, string) (*cstxproto.Relationship, error)
 	graphContains(context.Context, string) (bool, error)
 	graphNodeCount(context.Context) (uint64, error)
 	graphRelationshipCount(context.Context) (uint64, error)
+	graphNodeTypes(context.Context) ([]string, error)
+	graphDegree(context.Context, string, string) (uint64, error)
 	graphStats(context.Context) (*cstxproto.GraphStats, error)
 	graphNodes(context.Context, *cstxproto.NodeQuery) (graphCursor, error)
 	graphRelationships(context.Context, *cstxproto.RelationshipQuery) (graphCursor, error)
 	graphNeighbors(context.Context, *cstxproto.NeighborQuery) (graphCursor, error)
 	graphQuery(context.Context, *cstxproto.GraphQuery) (graphCursor, error)
 	graphAnalyze(context.Context, *cstxproto.Algorithm, *string) (uint8, bool, graphCursor, error)
+	graphLink(context.Context, []string, string) (*cstxproto.GraphLinkResult, error)
+	graphUpdateNodeFlags(context.Context, *cstxproto.NodeFlagChange) (uint64, error)
+	graphPatchNodeAnnotations(context.Context, *cstxproto.NodeAnnotationUpdate) (uint64, error)
+	graphFindAnchors(context.Context, string) (*cstxproto.GraphAnchorCatalog, error)
+
+	// Derived-graph operations return an independently owned engine, matching
+	// the Python methods that return a new CSTX.
 	graphSubgraph(context.Context, []string, uint32) (engine, error)
+	graphQuerySubgraph(context.Context, *cstxproto.GraphQuery) (engine, error)
+	graphInducedSubgraph(context.Context, []string, []string) (engine, error)
+	graphFilter(context.Context, *cstxproto.NodeFilter) (engine, error)
+	graphFilterWithReasons(context.Context, *cstxproto.NodeFilter) (engine, *cstxproto.GraphProjectionReport, error)
+	graphElevate(context.Context, string) (engine, error)
+	graphUnion(context.Context, engine) (engine, error)
+	graphDifference(context.Context, engine, string) (engine, error)
+	graphMerge(context.Context, engine) (uint64, error)
+
+	ragIndex(context.Context, *cstxproto.RagIndexPlan) (ragIndexSession, error)
+	ragRetrieve(context.Context, *cstxproto.RagQuery) (ragRetrieval, error)
 
 	repoResolve(context.Context, string) (string, error)
 	repoHead(context.Context, string) (*string, error)
@@ -68,5 +90,30 @@ type engine interface {
 
 type graphCursor interface {
 	page(context.Context, int, int) (*cstxproto.GraphResultPage, error)
+	close()
+}
+
+// ragIndexSession is a retained projection. It is a handle rather than a value
+// because the records it holds are streamed in bounded pages instead of being
+// materialized at once.
+type ragIndexSession interface {
+	metadata(context.Context) (*cstxproto.RagIndexResult, error)
+	pending(context.Context, int, int) (*cstxproto.RagRecordPage, error)
+	deletes(context.Context) ([]string, error)
+	records(context.Context) (ragRecordIterator, error)
+	close()
+}
+
+type ragRecordIterator interface {
+	next(context.Context) (*cstxproto.RagRecord, bool, error)
+	close()
+}
+
+// ragRetrieval is a suspended retrieval: the plan is read with requests, the
+// embedder's answers are handed back through complete, and completing consumes
+// the retrieval.
+type ragRetrieval interface {
+	requests(context.Context) (*cstxproto.RecallPlan, error)
+	complete(context.Context, *cstxproto.RecallResults) (*cstxproto.RagResult, error)
 	close()
 }

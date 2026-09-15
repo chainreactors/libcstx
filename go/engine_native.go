@@ -59,6 +59,26 @@ func (e *nativeEngine) close() error {
 	return nil
 }
 
+// adoptHandle takes ownership of a runtime handle the native side just
+// produced. Every derived-graph operation returns one, so the finalizer is set
+// in one place instead of at each call site.
+func adoptHandle(handle *C.CstxHandle) engine {
+	derived := &nativeEngine{handle: handle}
+	runtime.SetFinalizer(derived, (*nativeEngine).finalize)
+	return derived
+}
+
+// peerHandle reads the native handle out of another engine. The binary graph
+// operations are the only place one runtime reaches into another, and a
+// non-native peer cannot satisfy them.
+func peerHandle(other engine, operation string) (*C.CstxHandle, error) {
+	native, ok := other.(*nativeEngine)
+	if !ok || native.handle == nil {
+		return nil, &Error{Code: CodeInvalidArgument, Operation: operation, Message: "other graph is not an open native runtime"}
+	}
+	return native.handle, nil
+}
+
 func (e *nativeEngine) graphSubgraph(_ context.Context, seedIDs []string, depth uint32) (engine, error) {
 	payload, err := proto.Marshal(&cstxproto.GraphSelection{NodeIds: seedIDs})
 	if err != nil {
@@ -73,9 +93,133 @@ func (e *nativeEngine) graphSubgraph(_ context.Context, seedIDs []string, depth 
 	if err != nil {
 		return nil, err
 	}
-	derived := &nativeEngine{handle: handle}
-	runtime.SetFinalizer(derived, (*nativeEngine).finalize)
-	return derived, nil
+	return adoptHandle(handle), nil
+}
+
+// derivedHandle runs one native call that produces a new runtime handle from a
+// serialized request.
+func (e *nativeEngine) derivedHandle(
+	operation string,
+	request []byte,
+	call func(handle *C.CstxHandle, payload C.CstxSlice, output **C.CstxHandle, errBuf *C.CstxBuffer) C.CstxStatusCode,
+) (engine, error) {
+	var handle *C.CstxHandle
+	err := statusCall(operation, func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := call(e.handle, byteSlice(request), &handle, errBuf)
+		runtime.KeepAlive(request)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	return adoptHandle(handle), nil
+}
+
+func (e *nativeEngine) graphQuerySubgraph(_ context.Context, query *cstxproto.GraphQuery) (engine, error) {
+	payload, err := proto.Marshal(query)
+	if err != nil {
+		return nil, err
+	}
+	return e.derivedHandle("graph.query_subgraph", payload,
+		func(handle *C.CstxHandle, request C.CstxSlice, output **C.CstxHandle, errBuf *C.CstxBuffer) C.CstxStatusCode {
+			return C.cstx_graph_query_subgraph(handle, request, output, errBuf)
+		})
+}
+
+func (e *nativeEngine) graphInducedSubgraph(_ context.Context, nodeIDs, relationshipIDs []string) (engine, error) {
+	payload, err := proto.Marshal(&cstxproto.GraphSelection{NodeIds: nodeIDs, RelationshipIds: relationshipIDs})
+	if err != nil {
+		return nil, err
+	}
+	return e.derivedHandle("graph.induced_subgraph", payload,
+		func(handle *C.CstxHandle, request C.CstxSlice, output **C.CstxHandle, errBuf *C.CstxBuffer) C.CstxStatusCode {
+			return C.cstx_graph_induced_subgraph(handle, request, output, errBuf)
+		})
+}
+
+func (e *nativeEngine) graphFilter(_ context.Context, filter *cstxproto.NodeFilter) (engine, error) {
+	payload, err := proto.Marshal(filter)
+	if err != nil {
+		return nil, err
+	}
+	return e.derivedHandle("graph.filter", payload,
+		func(handle *C.CstxHandle, request C.CstxSlice, output **C.CstxHandle, errBuf *C.CstxBuffer) C.CstxStatusCode {
+			return C.cstx_graph_filter(handle, request, output, errBuf)
+		})
+}
+
+func (e *nativeEngine) graphFilterWithReasons(_ context.Context, filter *cstxproto.NodeFilter) (engine, *cstxproto.GraphProjectionReport, error) {
+	payload, err := proto.Marshal(filter)
+	if err != nil {
+		return nil, nil, err
+	}
+	var handle *C.CstxHandle
+	details, err := bufferResult("graph.filter_with_reasons", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_filter_with_reasons(e.handle, byteSlice(payload), &handle, out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+	var report cstxproto.GraphProjectionReport
+	if err := proto.Unmarshal(details, &report); err != nil {
+		return nil, nil, fmt.Errorf("cstx: decode graph projection report protobuf: %w", err)
+	}
+	return adoptHandle(handle), &report, nil
+}
+
+func (e *nativeEngine) graphElevate(_ context.Context, conceptName string) (engine, error) {
+	var handle *C.CstxHandle
+	err := statusCall("graph.elevate", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_elevate(e.handle, stringSlice(conceptName), &handle, errBuf)
+		runtime.KeepAlive(conceptName)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	return adoptHandle(handle), nil
+}
+
+func (e *nativeEngine) graphUnion(_ context.Context, other engine) (engine, error) {
+	right, err := peerHandle(other, "graph.union")
+	if err != nil {
+		return nil, err
+	}
+	var handle *C.CstxHandle
+	if err := statusCall("graph.union", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_graph_union(e.handle, right, &handle, errBuf)
+	}); err != nil {
+		return nil, err
+	}
+	return adoptHandle(handle), nil
+}
+
+func (e *nativeEngine) graphDifference(_ context.Context, other engine, nodeType string) (engine, error) {
+	right, err := peerHandle(other, "graph.difference")
+	if err != nil {
+		return nil, err
+	}
+	var handle *C.CstxHandle
+	if err := statusCall("graph.difference", func(errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_difference(e.handle, right, optionalStringSlice(nodeType), &handle, errBuf)
+		runtime.KeepAlive(nodeType)
+		return rc
+	}); err != nil {
+		return nil, err
+	}
+	return adoptHandle(handle), nil
+}
+
+func (e *nativeEngine) graphMerge(_ context.Context, other engine) (uint64, error) {
+	source, err := peerHandle(other, "graph.merge")
+	if err != nil {
+		return 0, err
+	}
+	return countResult("graph.merge", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_graph_merge(e.handle, source, out, errBuf)
+	})
 }
 
 func (e *nativeEngine) graphDeleteNodes(_ context.Context, nodeIDs []string) (uint64, error) {
@@ -370,6 +514,22 @@ func (e *nativeEngine) extensionAnchorConcepts(_ context.Context) (cstxproto.Anc
 
 // --- graph ---------------------------------------------------------------
 
+func (e *nativeEngine) graphParse(_ context.Context, payload *cstxproto.ParserPayload) (*cstxproto.Graph, uint64, error) {
+	graph, records, err := e.graphParseWire(context.Background(), payload)
+	if err != nil {
+		return nil, 0, err
+	}
+	return &graph, records, nil
+}
+
+func (e *nativeEngine) graphLink(_ context.Context, nodeIDs []string, dataSource string) (*cstxproto.GraphLinkResult, error) {
+	result, err := e.graphLinkWire(context.Background(), nodeIDs, dataSource)
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
 func (e *nativeEngine) graphAddNodes(_ context.Context, nodes []*cstxproto.Node) (uint64, error) {
 	return e.graphAddNodesWire(context.Background(), &cstxproto.Graph{Nodes: nodes})
 }
@@ -404,6 +564,85 @@ func (e *nativeEngine) graphRelationship(_ context.Context, relationshipID strin
 		return nil, err
 	}
 	return &relationship, nil
+}
+
+func (e *nativeEngine) graphFindNode(_ context.Context, identifier string) (*cstxproto.Node, error) {
+	data, err := bufferResult("graph.find_node", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_find_node(e.handle, stringSlice(identifier), out, errBuf)
+		runtime.KeepAlive(identifier)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	var node cstxproto.Node
+	if err := proto.Unmarshal(data, &node); err != nil {
+		return nil, fmt.Errorf("cstx: decode node protobuf: %w", err)
+	}
+	return &node, nil
+}
+
+func (e *nativeEngine) graphNodeTypes(_ context.Context) ([]string, error) {
+	data, err := bufferResult("graph.node_types", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		return C.cstx_graph_node_types(e.handle, out, errBuf)
+	})
+	if err != nil {
+		return nil, err
+	}
+	var catalog cstxproto.NodeTypeCatalog
+	if err := proto.Unmarshal(data, &catalog); err != nil {
+		return nil, fmt.Errorf("cstx: decode node type catalog protobuf: %w", err)
+	}
+	return catalog.GetNodeTypes(), nil
+}
+
+func (e *nativeEngine) graphDegree(_ context.Context, nodeID, direction string) (uint64, error) {
+	return countResult("graph.degree", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_degree(e.handle, stringSlice(nodeID), stringSlice(direction), out, errBuf)
+		runtime.KeepAlive(nodeID)
+		runtime.KeepAlive(direction)
+		return rc
+	})
+}
+
+func (e *nativeEngine) graphUpdateNodeFlags(_ context.Context, change *cstxproto.NodeFlagChange) (uint64, error) {
+	payload, err := proto.Marshal(change)
+	if err != nil {
+		return 0, err
+	}
+	return countResult("graph.update_node_flags", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_update_node_flags(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+}
+
+func (e *nativeEngine) graphPatchNodeAnnotations(_ context.Context, update *cstxproto.NodeAnnotationUpdate) (uint64, error) {
+	payload, err := proto.Marshal(update)
+	if err != nil {
+		return 0, err
+	}
+	return countResult("graph.patch_node_annotations", func(out *C.uint64_t, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_patch_node_annotations(e.handle, byteSlice(payload), out, errBuf)
+		runtime.KeepAlive(payload)
+		return rc
+	})
+}
+
+func (e *nativeEngine) graphFindAnchors(_ context.Context, conceptName string) (*cstxproto.GraphAnchorCatalog, error) {
+	data, err := bufferResult("graph.find_anchors", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+		rc := C.cstx_graph_find_anchors(e.handle, stringSlice(conceptName), out, errBuf)
+		runtime.KeepAlive(conceptName)
+		return rc
+	})
+	if err != nil {
+		return nil, err
+	}
+	var catalog cstxproto.GraphAnchorCatalog
+	if err := proto.Unmarshal(data, &catalog); err != nil {
+		return nil, fmt.Errorf("cstx: decode graph anchor catalog protobuf: %w", err)
+	}
+	return &catalog, nil
 }
 
 func (e *nativeEngine) graphContains(_ context.Context, nodeID string) (bool, error) {
