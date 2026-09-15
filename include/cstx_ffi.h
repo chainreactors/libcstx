@@ -142,6 +142,21 @@ CstxStatusCode cstx_extension_anchor_concepts(struct CstxHandle *handle,
                                               struct CstxBuffer *error);
 
 /**
+ * Parse one artifact through a native extension without mutating this graph.
+ *
+ * Input is a `ParserPayload`; output is a `Graph` batch plus the number of
+ * records parsed. The batch enters the same merge/link path as a parser
+ * implemented in any other language, so callers feed it to
+ * `cstx_graph_add_nodes` and then `cstx_graph_link`. The extension that owns
+ * the artifact must be enabled first or this reports `CSTX_NOT_FOUND`.
+ */
+CstxStatusCode cstx_graph_parse(struct CstxHandle *handle,
+                                struct CstxSlice payload,
+                                uint64_t *records,
+                                struct CstxBuffer *output,
+                                struct CstxBuffer *error);
+
+/**
  * Add or merge a protobuf graph aggregate at the Rust-owned semantic boundary.
  */
 CstxStatusCode cstx_graph_add_nodes(struct CstxHandle *handle,
