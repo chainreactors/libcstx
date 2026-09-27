@@ -54,6 +54,10 @@ export class Graph {
     nodeCount(): bigint;
     nodeTypes(): any;
     nodes(options?: any | null): GraphCursor;
+    /**
+     * Parse one extension artifact without mutating this graph.
+     */
+    parse(plugin: string, artifact: string, data: Uint8Array): any;
     patchNodeAnnotations(node_ids: string[] | null | undefined, patch: any): bigint;
     query(expression: string, options?: any | null): GraphCursor;
     querySubgraph(expression: string, limit?: number | null, page?: number | null, exclude_mask?: bigint | null, include_mask?: bigint | null): CSTX;
@@ -118,6 +122,7 @@ export interface InitOutput {
     readonly extensions_schemas: (a: number, b: number) => void;
     readonly extensions_parsesArtifact: (a: number, b: number, c: number, d: number) => void;
     readonly extensions_anchorConcepts: (a: number, b: number) => void;
+    readonly graph_parse: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
     readonly graph_addNode: (a: number, b: number, c: number) => void;
     readonly graph_addNodes: (a: number, b: number, c: number) => void;
     readonly graph_addRelationships: (a: number, b: number, c: number) => void;
