@@ -16,6 +16,7 @@ export const extensions_schema: (a: number, b: number, c: number, d: number) => 
 export const extensions_schemas: (a: number, b: number) => void;
 export const extensions_parsesArtifact: (a: number, b: number, c: number, d: number) => void;
 export const extensions_anchorConcepts: (a: number, b: number) => void;
+export const graph_parse: (a: number, b: number, c: number, d: number, e: number, f: number, g: number, h: number) => void;
 export const graph_addNode: (a: number, b: number, c: number) => void;
 export const graph_addNodes: (a: number, b: number, c: number) => void;
 export const graph_addRelationships: (a: number, b: number, c: number) => void;

@@ -71,34 +71,18 @@ func (s *nativeRagIndexSession) metadata(_ context.Context) (*cstxproto.RagIndex
 	if s.session == nil {
 		return nil, s.closedError("graph.rag.index.metadata")
 	}
-	data, err := bufferResult("graph.rag.index.metadata", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+	return protoResult[cstxproto.RagIndexResult]("graph.rag.index.metadata", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
 		return C.cstx_rag_index_session_metadata(s.session, out, errBuf)
 	})
-	if err != nil {
-		return nil, err
-	}
-	var result cstxproto.RagIndexResult
-	if err := proto.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("cstx: decode rag index result protobuf: %w", err)
-	}
-	return &result, nil
 }
 
 func (s *nativeRagIndexSession) pending(_ context.Context, offset, limit int) (*cstxproto.RagRecordPage, error) {
 	if s.session == nil {
 		return nil, s.closedError("graph.rag.index.pending")
 	}
-	data, err := bufferResult("graph.rag.index.pending", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+	return protoResult[cstxproto.RagRecordPage]("graph.rag.index.pending", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
 		return C.cstx_rag_index_session_pending(s.session, C.size_t(offset), C.size_t(limit), out, errBuf)
 	})
-	if err != nil {
-		return nil, err
-	}
-	var page cstxproto.RagRecordPage
-	if err := proto.Unmarshal(data, &page); err != nil {
-		return nil, fmt.Errorf("cstx: decode rag record page protobuf: %w", err)
-	}
-	return &page, nil
 }
 
 func (s *nativeRagIndexSession) deletes(_ context.Context) ([]string, error) {
@@ -198,17 +182,9 @@ func (r *nativeRagRetrieval) requests(_ context.Context) (*cstxproto.RecallPlan,
 	if r.retrieval == nil {
 		return nil, &Error{Code: CodeNotInitialized, Operation: "graph.rag.retrieve.requests", Message: "retrieval is closed"}
 	}
-	data, err := bufferResult("graph.rag.retrieve.requests", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+	return protoResult[cstxproto.RecallPlan]("graph.rag.retrieve.requests", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
 		return C.cstx_rag_retrieval_requests(r.retrieval, out, errBuf)
 	})
-	if err != nil {
-		return nil, err
-	}
-	var plan cstxproto.RecallPlan
-	if err := proto.Unmarshal(data, &plan); err != nil {
-		return nil, fmt.Errorf("cstx: decode recall plan protobuf: %w", err)
-	}
-	return &plan, nil
 }
 
 func (r *nativeRagRetrieval) complete(_ context.Context, results *cstxproto.RecallResults) (*cstxproto.RagResult, error) {
@@ -219,19 +195,11 @@ func (r *nativeRagRetrieval) complete(_ context.Context, results *cstxproto.Reca
 	if err != nil {
 		return nil, err
 	}
-	data, err := bufferResult("graph.rag.complete", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
+	return protoResult[cstxproto.RagResult]("graph.rag.complete", func(out, errBuf *C.CstxBuffer) C.CstxStatusCode {
 		rc := C.cstx_rag_retrieval_complete(r.retrieval, byteSlice(payload), out, errBuf)
 		runtime.KeepAlive(payload)
 		return rc
 	})
-	if err != nil {
-		return nil, err
-	}
-	var result cstxproto.RagResult
-	if err := proto.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("cstx: decode rag result protobuf: %w", err)
-	}
-	return &result, nil
 }
 
 func (r *nativeRagRetrieval) close() {
